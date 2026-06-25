@@ -18,12 +18,12 @@
     }
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{margin:0;min-height:100%;font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;background:radial-gradient(circle at 12% -8%,#bae6fd 0,#eef3f8 34%,#f8fafc 100%);color:var(--ink)}
-    body{overflow-x:hidden}.app{max-width:980px;margin:auto;padding:14px 13px 96px}.hero{border-radius:34px;background:linear-gradient(145deg,#07111f,#10243d 58%,#0e7490);color:#fff;box-shadow:var(--shadow);padding:20px;position:relative;overflow:hidden}.hero:before{content:"";position:absolute;left:-70px;top:-70px;width:210px;height:210px;border-radius:50%;background:rgba(34,211,238,.28);filter:blur(2px)}.hero:after{content:"";position:absolute;right:-45px;bottom:-70px;width:190px;height:190px;border-radius:50%;background:rgba(14,165,233,.20)}
-    .top{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:12px}.brand{display:flex;align-items:center;gap:12px}.logo{width:54px;height:54px;border-radius:19px;background:#fff;color:#0369a1;display:grid;place-items:center;font-size:28px;box-shadow:0 14px 28px rgba(0,0,0,.20)}h1{font-size:24px;margin:0}.caption{margin-top:4px;font-size:13px;opacity:.82;line-height:1.6}.pill{border:1px solid rgba(255,255,255,.20);background:rgba(255,255,255,.12);border-radius:999px;padding:9px 12px;font-size:12px;font-weight:900;white-space:nowrap}.speedCircle{position:relative;z-index:2;margin:22px auto 12px;width:214px;height:214px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#22d3ee var(--speedDeg,0deg),rgba(255,255,255,.14) 0);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}.speedInner{width:166px;height:166px;border-radius:50%;background:rgba(7,17,31,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.speedNum{font-size:52px;font-weight:950;letter-spacing:-1px}.speedUnit{font-size:13px;color:#bae6fd;font-weight:800}.heroStats{position:relative;z-index:2;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.heroStat{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.15);border-radius:22px;text-align:center;padding:12px}.heroStat b{display:block;font-size:20px}.heroStat span{font-size:11px;opacity:.78}
+    body{overflow-x:hidden}.app{max-width:980px;margin:auto;padding:10px 10px 96px}.hero{border-radius:28px;background:linear-gradient(145deg,#07111f,#10243d 58%,#0e7490);color:#fff;box-shadow:var(--shadow);padding:14px 16px;position:relative;overflow:hidden}.hero:before,.hero:after{display:none}
+    .top{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:12px}.brand{display:flex;align-items:center;gap:12px}.logo{width:48px;height:48px;border-radius:17px;background:#fff;color:#0369a1;display:grid;place-items:center;font-size:25px;box-shadow:0 14px 28px rgba(0,0,0,.20)}h1{font-size:21px;margin:0}.caption{margin-top:4px;font-size:12px;opacity:.82;line-height:1.6}.pill{border:1px solid rgba(255,255,255,.20);background:rgba(255,255,255,.12);border-radius:999px;padding:8px 10px;font-size:11px;font-weight:900;white-space:nowrap}.speedCircle{display:none!important}.speedInner,.speedNum,.speedUnit{display:none}.heroStats{position:relative;z-index:2;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.heroStat{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.15);border-radius:18px;text-align:center;padding:9px}.heroStat b{display:block;font-size:18px}.heroStat span{font-size:10px;opacity:.78}
     .panel{background:rgba(255,255,255,.92);border:1px solid rgba(255,255,255,.88);box-shadow:var(--soft);backdrop-filter:blur(12px);border-radius:28px;padding:15px;margin-top:14px}.sectionTitle{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.sectionTitle h2{font-size:18px;margin:0}.small{font-size:12px;color:var(--muted);line-height:1.75}.notice{background:#ecfeff;border:1px solid #a5f3fc;color:#155e75;border-radius:20px;padding:12px;font-size:13px;line-height:1.8}.notice.warn{background:#fffbeb;border-color:#fde68a;color:#92400e}.notice.bad{background:#fef2f2;border-color:#fecaca;color:#991b1b}.notice.ok{background:#ecfdf5;border-color:#99f6e4;color:#065f46}
-    .previewWrap{position:relative;border-radius:28px;overflow:hidden;background:#020617;box-shadow:0 18px 40px rgba(2,6,23,.22);aspect-ratio:16/9;min-height:220px}canvas#dashCanvas{display:block;width:100%;height:100%;background:#020617}.cameraPlaceholder{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#cbd5e1;padding:22px}.cameraPlaceholder b{display:block;color:#fff;font-size:19px;margin-bottom:8px}.recDot{position:absolute;top:14px;left:14px;background:rgba(239,68,68,.95);color:#fff;border-radius:999px;padding:7px 11px;font-size:12px;font-weight:950;display:none;gap:7px;align-items:center}.recDot.show{display:flex}.recDot:before{content:"";width:8px;height:8px;border-radius:50%;background:#fff;animation:pulse 1s infinite}@keyframes pulse{50%{opacity:.35}}
+    .previewWrap{position:relative;border-radius:28px;overflow:hidden;background:#020617;box-shadow:0 18px 40px rgba(2,6,23,.22);aspect-ratio:16/9;min-height:260px}canvas#dashCanvas{display:block;width:100%;height:100%;background:#020617}.cameraPlaceholder{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#cbd5e1;padding:22px}.cameraPlaceholder b{display:block;color:#fff;font-size:19px;margin-bottom:8px}.recDot{position:absolute;top:14px;left:14px;background:rgba(239,68,68,.95);color:#fff;border-radius:999px;padding:7px 11px;font-size:12px;font-weight:950;display:none;gap:7px;align-items:center}.recDot.show{display:flex}.recDot:before{content:"";width:8px;height:8px;border-radius:50%;background:#fff;animation:pulse 1s infinite}@keyframes pulse{50%{opacity:.35}}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.stat{border:1px solid var(--line);border-radius:24px;padding:14px;background:#fff}.stat .label{color:var(--muted);font-size:12px;font-weight:900}.stat .value{font-size:29px;font-weight:950;margin-top:5px;color:#0369a1}.stat .unit{font-size:11px;color:var(--muted)}button,input,select,textarea{font:inherit;border-radius:18px;outline:none}button{border:0;padding:14px 11px;font-weight:950;color:#fff;background:linear-gradient(135deg,var(--primary),var(--primary2));box-shadow:0 12px 22px rgba(14,165,233,.23);cursor:pointer}button.dark{background:#07111f}button.light{background:#fff;color:#0f172a;border:1px solid var(--line);box-shadow:none}button.gold{background:linear-gradient(135deg,#f59e0b,#f97316)}button.danger{background:var(--danger)}button.emergency{background:linear-gradient(135deg,#dc2626,#f97316)}button.green{background:linear-gradient(135deg,#059669,#10b981)}button:disabled{opacity:.45;cursor:not-allowed}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.field{display:flex;flex-direction:column;gap:7px;margin-bottom:11px}.field label{font-size:12px;color:var(--muted);font-weight:950}input,select,textarea{border:1px solid var(--line);background:#fff;padding:13px;color:var(--ink)}textarea{min-height:84px;resize:vertical}.statusLine{font-size:12px;color:var(--muted);line-height:1.8;margin-top:10px}.clipItem{background:#fff;border:1px solid var(--line);border-radius:24px;padding:13px;margin:10px 0}.clipTop{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.clipTop b{font-size:14px}.badge{background:#dbeafe;color:#1e40af;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:950}.badge.lock{background:#fee2e2;color:#991b1b}.badge.ok{background:#dcfce7;color:#166534}.clipMeta{font-size:12px;color:var(--muted);line-height:1.8}.clipActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.clipActions button{padding:10px 8px;font-size:12px}.empty{text-align:center;padding:24px;color:var(--muted);font-size:13px}.videoMini{width:100%;border-radius:18px;background:#020617;margin-top:8px;max-height:240px}.tabs{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.92);backdrop-filter:blur(18px);border-top:1px solid var(--line);display:flex;gap:8px;padding:9px 10px calc(9px + env(safe-area-inset-bottom));z-index:40}.tab{flex:1;background:transparent;color:#64748b;box-shadow:none;border-radius:18px;padding:10px 4px;font-size:12px}.tab.active{background:#07111f;color:#fff}.page{display:none}.page.active{display:block}.toast{position:fixed;top:12px;left:12px;right:12px;background:#07111f;color:#fff;border-radius:22px;padding:14px;box-shadow:0 20px 45px rgba(0,0,0,.25);display:none;z-index:60;line-height:1.7}.toast.show{display:block}video#cameraVideo{position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0}.timer{font-variant-numeric:tabular-nums;font-weight:950}.dangerText{color:#991b1b;font-weight:900}.safeText{color:#065f46;font-weight:900}
-    @media(min-width:780px){.clipActions{grid-template-columns:repeat(5,1fr)}.layout{display:grid;grid-template-columns:1.03fr .97fr;gap:14px}.cards{grid-template-columns:repeat(4,1fr)}.speedCircle{width:242px;height:242px}.speedInner{width:188px;height:188px}.speedNum{font-size:60px}.panel{padding:17px}.previewWrap{min-height:300px}}
+    @media(min-width:780px){.clipActions{grid-template-columns:repeat(5,1fr)}.layout{display:flex;flex-direction:column;gap:14px}.cards{grid-template-columns:repeat(4,1fr)}.panel{padding:17px}.previewWrap{min-height:520px}}@media(max-width:520px){.hero{margin-bottom:10px}.panel{border-radius:22px;padding:11px}.sectionTitle h2{font-size:16px}.previewWrap{border-radius:22px;min-height:62vh;aspect-ratio:auto}.actions{grid-template-columns:1fr 1fr}.cards{grid-template-columns:repeat(2,1fr)}.stat{padding:10px;border-radius:18px}.stat .value{font-size:23px}.notice{font-size:12px;padding:10px}.top{align-items:flex-start}.pill{display:none}}
   </style>
 </head>
 <body>
@@ -32,21 +32,8 @@
 <div class="app">
   <section id="home" class="page active">
     <div class="layout">
-      <div class="hero">
-        <div class="top">
-          <div class="brand"><div class="logo">🚘</div><div><h1>داش كام الرحلة</h1><div class="caption">تسجيل أمامي مع التاريخ والسرعة داخل الفيديو</div></div></div>
-          <div class="pill" id="modePill">Android APK</div>
-        </div>
-        <div class="speedCircle" id="speedCircle"><div class="speedInner"><div class="speedNum" id="speedNowHero">0</div><div class="speedUnit">كم/س الآن</div></div></div>
-        <div class="heroStats">
-          <div class="heroStat"><b id="maxSpeedHero">0</b><span>أعلى سرعة</span></div>
-          <div class="heroStat"><b id="distanceHero">0.00</b><span>كم</span></div>
-          <div class="heroStat"><b id="durationHero">00:00</b><span>مدة</span></div>
-        </div>
-      </div>
-
       <div>
-        <div class="panel">
+        <div class="panel cameraPanel">
           <div class="sectionTitle"><h2>الكاميرا والتسجيل</h2><span class="small" id="cameraStatus">جاهز</span></div>
           <div class="previewWrap">
             <canvas id="dashCanvas" width="1280" height="720"></canvas>
@@ -63,6 +50,19 @@
           <div class="notice warn" style="margin-top:12px"><span class="dangerText">تنبيه أمان:</span> ثبّت الهاتف قبل الانطلاق، ولا تلمس التطبيق أثناء القيادة.</div>
           <div class="notice" id="wakeStatus" style="margin-top:10px">إبقاء الشاشة: جاهز عند بدء التسجيل</div>
           <div class="notice ok" id="segmentStatus" style="margin-top:10px">تقسيم المقاطع: جاهز</div>
+        </div>
+      </div>
+
+      <div class="hero">
+        <div class="top">
+          <div class="brand"><div class="logo">🚘</div><div><h1>داش كام الرحلة</h1><div class="caption">كاميرا ملء الشاشة مع حفظ مباشر داخل الجهاز</div></div></div>
+          <div class="pill" id="modePill">Android v1.1</div>
+        </div>
+        <div class="speedCircle" id="speedCircle"><div class="speedInner"><div class="speedNum" id="speedNowHero">0</div><div class="speedUnit">كم/س الآن</div></div></div>
+        <div class="heroStats">
+          <div class="heroStat"><b id="maxSpeedHero">0</b><span>أعلى سرعة</span></div>
+          <div class="heroStat"><b id="distanceHero">0.00</b><span>كم</span></div>
+          <div class="heroStat"><b id="durationHero">00:00</b><span>مدة</span></div>
         </div>
       </div>
     </div>
@@ -88,7 +88,7 @@
 
   <section id="settings" class="page">
     <div class="panel">
-      <div class="sectionTitle"><h2>إعدادات التسجيل</h2><span class="small">مناسبة للآيفون</span></div>
+      <div class="sectionTitle"><h2>إعدادات التسجيل</h2><span class="small">مناسبة للأندرويد</span></div>
       <div class="grid2">
         <div class="field"><label>جودة الفيديو</label><select id="quality"><option value="720">HD 720p أخف</option><option value="1080">Full HD 1080p أثقل</option></select></div>
         <div class="field"><label>عدد الإطارات</label><select id="fps"><option value="24">24 fps أوفر</option><option value="30">30 fps أنعم</option></select></div>
@@ -110,7 +110,7 @@
     </div>
 
     <div class="panel">
-      <div class="sectionTitle"><h2>طريقة الاستخدام على الآيفون</h2></div>
+      <div class="sectionTitle"><h2>طريقة الاستخدام على الأندرويد</h2></div>
       <div class="notice ok"><b>الأفضل:</b> ثبّت ملف APK وافتح التطبيق، ثم امنح إذن الكاميرا والموقع عند الطلب.</div>
       <div class="notice" style="margin-top:10px">هذه نسخة أندرويد داخل WebView آمن مدمج. أثناء التسجيل أبقِ التطبيق مفتوحًا وثبّت الهاتف قبل القيادة.</div>
       <div class="notice warn" style="margin-top:10px">التقسيم التلقائي يحفظ المقاطع على أجزاء حتى لا يثقل الهاتف. زر الطوارئ يحفظ المقطع الحالي ويحميه من الحذف التلقائي.</div>
@@ -126,8 +126,8 @@
 
 <script>
 const $=id=>document.getElementById(id);
-const STORE='dashcam_iphone_v2';
-const DB_NAME='dashcam_iphone_db';
+const STORE='dashcam_android_v11';
+const DB_NAME='dashcam_android_db';
 const DB_STORE='clips';
 let settings=loadSettings();
 let cameraStream=null, displayStream=null, mediaRecorder=null, chunks=[];
@@ -136,7 +136,7 @@ let sessionId=0, segmentStartedAt=0, segmentIndex=1, segmentTimer=null, splitInP
 let cameraFacing='environment';
 let trip={speed:0,maxSpeed:0,distanceM:0,lastPos:null,lastFixTime:0,avgSpeed:0,accuracy:null};
 
-function loadSettings(){const base={quality:'720',fps:'24',overlayStyle:'classic',audioMode:'off',stampName:'Road Dash Cam',segmentMinutes:'3',autoDeleteDays:'0',maxClips:'20',stampDensity:'full'};try{return Object.assign(base,JSON.parse(localStorage.getItem(STORE)||'{}'))}catch(e){return base}}
+function loadSettings(){const base={quality:'720',fps:'24',overlayStyle:'classic',audioMode:'off',stampName:'Android Road Dash',segmentMinutes:'1',autoDeleteDays:'0',maxClips:'20',stampDensity:'full'};try{return Object.assign(base,JSON.parse(localStorage.getItem(STORE)||'{}'))}catch(e){return base}}
 function saveSettingsLocal(){localStorage.setItem(STORE,JSON.stringify(settings));}
 function toast(msg){const el=$('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),3300)}
 function pad(n){return String(n).padStart(2,'0')}
@@ -254,11 +254,22 @@ function chooseMime(){
   for(const t of types){try{if(MediaRecorder.isTypeSupported(t))return t}catch(e){}}
   return '';
 }
+function hasNativeSave(){return !!(window.AndroidDashCam&&typeof window.AndroidDashCam.saveVideoBase64==='function')}
+function blobToBase64(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onerror=()=>rej(r.error);r.onload=()=>{const v=String(r.result||'');res(v.includes(',')?v.split(',')[1]:v)};r.readAsDataURL(blob);})}
+async function nativeSaveRecording(blob,name,type){
+  if(!hasNativeSave())return false;
+  try{
+    const base64=await blobToBase64(blob);
+    const msg=window.AndroidDashCam.saveVideoBase64(name||'dashcam.mp4',type||'video/mp4',base64);
+    if(msg)toast(msg);
+    return true;
+  }catch(e){toast('بقي الفيديو داخل التطبيق، وتعذر حفظه في الاستديو');return false}
+}
 async function startRecording(){
   if(recording)return;
   if(!cameraStream){toast('شغّل الكاميرا أولاً');return}
   const canvas=$('dashCanvas');
-  if(!canvas.captureStream||typeof MediaRecorder==='undefined'){toast('هذا المتصفح لا يدعم حفظ فيديو بالكتابة داخل الفيديو');return}
+  if(!canvas.captureStream||typeof MediaRecorder==='undefined'){toast('WebView على هذا الهاتف لا يدعم تسجيل Canvas. جرّب تحديث Android System WebView أو انتظر نسخة Native CameraX.');return}
   chunks=[];resetTrip();startedAt=Date.now();sessionId=startedAt;segmentIndex=1;currentProtected=false;recording=true;updateStats();
   $('recDot').classList.add('show');$('recordBtn').disabled=true;$('stopBtn').disabled=false;$('emergencyBtn').disabled=false;$('cameraBtn').disabled=true;$('switchBtn').disabled=true;$('cameraStatus').textContent='جاري التسجيل';
   enableWake();startGps();timerId=setInterval(updateStats,1000);
@@ -309,8 +320,9 @@ async function saveRecording(){
     if(blob.size>0){
       const meta={id:Date.now(),sessionId,segmentIndex:thisSegmentIndex,created:new Date().toISOString(),name:`dashcam-${fileStamp()}-part${thisSegmentIndex}${protectedClip?'-emergency':''}.${type.includes('mp4')?'mp4':'webm'}`,type,size:blob.size,durationMs:segmentDuration,totalDurationMs:Date.now()-startedAt,maxSpeed:Math.round(trip.maxSpeed||0),avgSpeed:Math.round(trip.avgSpeed||0),distanceKm:+(trip.distanceM/1000).toFixed(2),protected:protectedClip};
       await dbPut(meta,blob);
+      nativeSaveRecording(blob,meta.name,meta.type);
       await autoCleanClips();
-      toast(protectedClip?'تم حفظ مقطع طوارئ محمي ✅':'تم حفظ المقطع ✅');
+      toast(protectedClip?'تم حفظ مقطع طوارئ محمي داخل التطبيق ✅':'تم حفظ المقطع داخل التطبيق ✅');
       await renderClips();
     }
   }catch(e){toast('حدث خطأ أثناء حفظ الفيديو')}
@@ -349,7 +361,7 @@ async function toggleProtect(id){const c=await getClip(id);if(!c)return;c.protec
 async function copyClipName(id){const c=await getClip(id);if(!c)return;try{await navigator.clipboard.writeText(c.name||'dashcam.mp4');toast('تم نسخ اسم الملف')}catch(e){toast(c.name||'dashcam.mp4')}}
 
 function show(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));$(id).classList.add('active');document.querySelector(`.tab[data-tab="${id}"]`).classList.add('active');if(id==='clips')renderClips();}
-function boot(){loadForm();startRenderLoop();renderClips();updateStats();if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js').catch(()=>{}));}
+function boot(){loadForm();startRenderLoop();renderClips();updateStats();if(hasNativeSave())toast('الحفظ المباشر في استديو أندرويد مفعّل ✅');if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js').catch(()=>{}));}
 $('cameraBtn').onclick=startCamera;$('recordBtn').onclick=startRecording;$('stopBtn').onclick=stopRecording;$('emergencyBtn').onclick=emergencySave;$('switchBtn').onclick=switchCamera;$('saveSettings').onclick=saveSettingsFromForm;
 $('clearClips').onclick=async()=>{if(confirm('مسح كل الفيديوهات؟')){await dbClear();renderClips();toast('تم مسح الفيديوهات')}};
 $('clipsList').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.download)downloadClip(b.dataset.download);if(b.dataset.share)shareClip(b.dataset.share);if(b.dataset.protect)toggleProtect(b.dataset.protect);if(b.dataset.copyname)copyClipName(b.dataset.copyname);if(b.dataset.delete&&confirm('حذف هذا الفيديو؟')){await dbDelete(Number(b.dataset.delete));renderClips();}});

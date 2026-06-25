@@ -1,6 +1,14 @@
 package com.explapp.cardashcam;
 
 import android.Manifest;
+import android.content.ContentResolver;
+import android.content.ContentValues;
+import android.media.MediaScannerConnection;
+import android.net.Uri;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.util.Base64;
+import android.webkit.JavascriptInterface;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.pm.PackageManager;
@@ -26,6 +34,9 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.webkit.WebViewAssetLoader;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -70,6 +81,7 @@ public class MainActivity extends Activity {
         settings.setLoadsImagesAutomatically(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        webView.addJavascriptInterface(new NativeBridge(), "AndroidDashCam");
 
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -207,6 +219,70 @@ public class MainActivity extends Activity {
             webView = null;
         }
         super.onDestroy();
+    }
+
+
+    public class NativeBridge {
+        @JavascriptInterface
+        public String saveVideoBase64(String fileName, String mimeType, String base64Data) {
+            try {
+                String safeName = sanitizeFileName(fileName);
+                if (safeName.length() == 0) safeName = "dashcam-video.mp4";
+                if (mimeType == null || mimeType.trim().length() == 0) mimeType = safeName.endsWith(".webm") ? "video/webm" : "video/mp4";
+
+                byte[] data = Base64.decode(base64Data, Base64.DEFAULT);
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentResolver resolver = getContentResolver();
+                    ContentValues values = new ContentValues();
+                    values.put(MediaStore.Video.Media.DISPLAY_NAME, safeName);
+                    values.put(MediaStore.Video.Media.MIME_TYPE, mimeType);
+                    values.put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/DashCamTrip");
+                    values.put(MediaStore.Video.Media.IS_PENDING, 1);
+
+                    Uri uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
+                    if (uri == null) throw new Exception("تعذر إنشاء ملف الفيديو");
+
+                    OutputStream out = resolver.openOutputStream(uri);
+                    if (out == null) throw new Exception("تعذر فتح ملف الحفظ");
+                    try {
+                        out.write(data);
+                        out.flush();
+                    } finally {
+                        out.close();
+                    }
+
+                    values.clear();
+                    values.put(MediaStore.Video.Media.IS_PENDING, 0);
+                    resolver.update(uri, values, null, null);
+                    return "تم حفظ الفيديو في الاستديو: Movies/DashCamTrip ✅";
+                } else {
+                    File baseDir = getExternalFilesDir(Environment.DIRECTORY_MOVIES);
+                    if (baseDir == null) baseDir = getFilesDir();
+                    File dir = new File(baseDir, "DashCamTrip");
+                    if (!dir.exists()) dir.mkdirs();
+                    File file = new File(dir, safeName);
+                    FileOutputStream out = new FileOutputStream(file);
+                    try {
+                        out.write(data);
+                        out.flush();
+                    } finally {
+                        out.close();
+                    }
+                    MediaScannerConnection.scanFile(MainActivity.this, new String[]{file.getAbsolutePath()}, new String[]{mimeType}, null);
+                    return "تم حفظ الفيديو في Movies/DashCamTrip ✅";
+                }
+            } catch (Throwable t) {
+                return "تعذر حفظ الفيديو في الاستديو: " + (t.getMessage() == null ? "خطأ غير معروف" : t.getMessage());
+            }
+        }
+    }
+
+    private String sanitizeFileName(String name) {
+        if (name == null) return "";
+        String cleaned = name.replaceAll("[\\\\/:*?\"<>|]", "-").trim();
+        if (cleaned.length() > 90) cleaned = cleaned.substring(0, 90);
+        return cleaned;
     }
 
     @Override
