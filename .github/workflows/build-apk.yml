@@ -1,0 +1,64 @@
+name: Build APK Direct
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Build Debug APK
+        run: gradle :app:assembleDebug --no-daemon
+
+      - name: Copy APK
+        run: |
+          mkdir -p apk
+          cp app/build/outputs/apk/debug/app-debug.apk apk/dashcam-android-v1.apk
+          ls -lh apk
+
+      - name: Update download note
+        run: |
+          cat > DOWNLOAD_APK.md <<'MD'
+          # Dash Cam Android V1
+
+          APK جاهز بعد آخر بناء:
+
+          `apk/dashcam-android-v1.apk`
+
+          ملاحظات:
+          - نسخة اختبار مباشرة APK.
+          - لا يوجد AAB.
+          - لا يوجد GitHub Releases.
+          - إذا لم تظهر التغييرات على الهاتف، احذف التطبيق القديم وثبت النسخة الجديدة.
+          MD
+
+      - name: Commit APK
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add apk/dashcam-android-v1.apk DOWNLOAD_APK.md
+          git commit -m "Update Android dashcam APK" || echo "No changes to commit"
+          git push
