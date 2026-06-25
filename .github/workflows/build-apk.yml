@@ -36,17 +36,17 @@ jobs:
       - name: Copy APK
         run: |
           mkdir -p apk
-          cp app/build/outputs/apk/debug/app-debug.apk apk/dashcam-android-v1.apk
+          cp app/build/outputs/apk/debug/app-debug.apk apk/dashcam-android-v1-1.apk
           ls -lh apk
 
       - name: Update download note
         run: |
           cat > DOWNLOAD_APK.md <<'MD'
-          # Dash Cam Android V1
+          # Dash Cam Android V1.1
 
           APK جاهز بعد آخر بناء:
 
-          `apk/dashcam-android-v1.apk`
+          `apk/dashcam-android-v1-1.apk`
 
           ملاحظات:
           - نسخة اختبار مباشرة APK.
@@ -59,6 +59,6 @@ jobs:
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          git add apk/dashcam-android-v1.apk DOWNLOAD_APK.md
+          git add apk/dashcam-android-v1-1.apk DOWNLOAD_APK.md
           git commit -m "Update Android dashcam APK" || echo "No changes to commit"
           git push
