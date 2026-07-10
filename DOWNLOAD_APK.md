@@ -1,11 +1,5 @@
-# Dash Cam Android V1.1
+# Dash Cam — Android 4.4
 
-APK جاهز بعد آخر بناء:
+APK مستقل لفرع Android 4.4:
 
-`apk/dashcam-android-v1-1.apk`
-
-ملاحظات:
-- نسخة اختبار مباشرة APK.
-- لا يوجد AAB.
-- لا يوجد GitHub Releases.
-- إذا لم تظهر التغييرات على الهاتف، احذف التطبيق القديم وثبت النسخة الجديدة.
+https://github.com/aljwaal1/dashcamapk/raw/android-4.4/apk/dashcam-android-4.4.apk
