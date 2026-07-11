@@ -1,293 +1,288 @@
 package com.explapp.cardashcam;
 
 import android.Manifest;
-import android.content.ContentResolver;
-import android.content.ContentValues;
-import android.media.MediaScannerConnection;
-import android.net.Uri;
-import android.os.Environment;
-import android.provider.MediaStore;
-import android.util.Base64;
-import android.webkit.JavascriptInterface;
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.pm.PackageManager;
-import android.net.http.SslError;
-import android.os.Build;
+import android.graphics.Color;
+import android.hardware.Camera;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.media.CamcorderProfile;
+import android.media.MediaRecorder;
+import android.media.MediaScannerConnection;
 import android.os.Bundle;
+import android.os.Environment;
+import android.view.Gravity;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
-import android.webkit.GeolocationPermissions;
-import android.webkit.PermissionRequest;
-import android.webkit.SslErrorHandler;
-import android.webkit.WebChromeClient;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import androidx.webkit.WebViewAssetLoader;
-
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.List;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
-public class MainActivity extends Activity {
-    private static final int REQ_WEB_PERMISSIONS = 1001;
-    private static final int REQ_GEO_PERMISSION = 1002;
+public class MainActivity extends Activity implements SurfaceHolder.Callback, LocationListener {
+    private static final int REQ_PERMISSIONS = 44;
 
-    private WebView webView;
-    private PermissionRequest pendingMediaRequest;
-    private GeolocationPermissions.Callback pendingGeoCallback;
-    private String pendingGeoOrigin;
+    private SurfaceView preview;
+    private Camera camera;
+    private MediaRecorder recorder;
+    private boolean recording;
+    private File currentFile;
+    private TextView speedText;
+    private TextView statusText;
+    private Button recordButton;
+    private LocationManager locationManager;
 
-    private final String[] basePermissions = new String[]{
-            Manifest.permission.CAMERA,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-    };
-
-    @SuppressLint({"SetJavaScriptEnabled", "ClickableViewAccessibility"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON, WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-        }
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        webView = new WebView(this);
-        webView.setLayoutParams(new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-        setContentView(webView);
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(Color.BLACK);
 
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
-        settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setGeolocationEnabled(true);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
-        settings.setLoadsImagesAutomatically(true);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        webView.addJavascriptInterface(new NativeBridge(), "AndroidDashCam");
+        preview = new SurfaceView(this);
+        preview.getHolder().addCallback(this);
+        root.addView(preview, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
-        final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
-                .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
-                .build();
+        LinearLayout topBar = new LinearLayout(this);
+        topBar.setOrientation(LinearLayout.HORIZONTAL);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        topBar.setPadding(dp(12), dp(8), dp(12), dp(8));
+        topBar.setBackgroundColor(0x99000000);
 
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                return assetLoader.shouldInterceptRequest(request.getUrl());
-            }
+        statusText = label("جاهز للتسجيل");
+        speedText = label("0 كم/س");
+        speedText.setGravity(Gravity.RIGHT);
+        topBar.addView(statusText, new LinearLayout.LayoutParams(0, dp(44), 1f));
+        topBar.addView(speedText, new LinearLayout.LayoutParams(0, dp(44), 1f));
 
-            @Override
-            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                handler.cancel();
-            }
-        });
+        FrameLayout.LayoutParams topParams = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(60), Gravity.TOP);
+        root.addView(topBar, topParams);
 
-        webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onPermissionRequest(final PermissionRequest request) {
-                runOnUiThread(() -> handleMediaPermissionRequest(request));
-            }
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.HORIZONTAL);
+        controls.setGravity(Gravity.CENTER);
+        controls.setPadding(dp(12), dp(8), dp(12), dp(8));
+        controls.setBackgroundColor(0x99000000);
 
-            @Override
-            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
-                if (hasLocationPermission()) {
-                    callback.invoke(origin, true, false);
-                } else {
-                    pendingGeoOrigin = origin;
-                    pendingGeoCallback = callback;
-                    ActivityCompat.requestPermissions(MainActivity.this,
-                            new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
-                            REQ_GEO_PERMISSION);
-                }
+        recordButton = new Button(this);
+        recordButton.setText("ابدأ التسجيل");
+        recordButton.setTextSize(18);
+        recordButton.setAllCaps(false);
+        recordButton.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (recording) stopRecording(); else startRecording();
             }
         });
+        controls.addView(recordButton, new LinearLayout.LayoutParams(dp(210), dp(54)));
 
-        requestInitialPermissionsIfNeeded();
-        webView.loadUrl("https://appassets.androidplatform.net/assets/index.html");
+        FrameLayout.LayoutParams controlParams = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(72), Gravity.BOTTOM);
+        root.addView(controls, controlParams);
+        setContentView(root);
+
+        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        requestNeededPermissions();
     }
 
-    private void requestInitialPermissionsIfNeeded() {
-        List<String> missing = new ArrayList<>();
-        for (String p : basePermissions) {
-            if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-                missing.add(p);
-            }
+    private TextView label(String text) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextColor(Color.WHITE);
+        view.setTextSize(20);
+        view.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        return view;
+    }
+
+    private int dp(int value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    private void requestNeededPermissions() {
+        if (android.os.Build.VERSION.SDK_INT < 23) {
+            startLocation();
+            return;
         }
-        if (!missing.isEmpty()) {
-            ActivityCompat.requestPermissions(this, missing.toArray(new String[0]), REQ_WEB_PERMISSIONS);
-        }
-    }
-
-    private void handleMediaPermissionRequest(PermissionRequest request) {
-        List<String> missing = new ArrayList<>();
-        for (String res : request.getResources()) {
-            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(res) && !hasCameraPermission()) {
-                missing.add(Manifest.permission.CAMERA);
-            }
-            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(res) && !hasAudioPermission()) {
-                missing.add(Manifest.permission.RECORD_AUDIO);
-            }
-        }
-
-        if (missing.isEmpty()) {
-            request.grant(request.getResources());
-        } else {
-            pendingMediaRequest = request;
-            ActivityCompat.requestPermissions(this, missing.toArray(new String[0]), REQ_WEB_PERMISSIONS);
-        }
-    }
-
-
-    private boolean hasPermissionsForRequest(PermissionRequest request) {
-        for (String res : request.getResources()) {
-            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(res) && !hasCameraPermission()) return false;
-            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(res) && !hasAudioPermission()) return false;
-        }
-        return true;
-    }
-
-    private boolean hasCameraPermission() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
-    }
-
-    private boolean hasAudioPermission() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
-    }
-
-    private boolean hasLocationPermission() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        String[] permissions = new String[]{
+                Manifest.permission.CAMERA,
+                Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+        };
+        requestPermissions(permissions, REQ_PERMISSIONS);
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
-        if (requestCode == REQ_GEO_PERMISSION && pendingGeoCallback != null) {
-            boolean allowed = hasLocationPermission();
-            pendingGeoCallback.invoke(pendingGeoOrigin, allowed, false);
-            if (!allowed) Toast.makeText(this, "يلزم إذن الموقع لعرض السرعة", Toast.LENGTH_LONG).show();
-            pendingGeoCallback = null;
-            pendingGeoOrigin = null;
-        }
-
-        if (requestCode == REQ_WEB_PERMISSIONS && pendingMediaRequest != null) {
-            if (hasPermissionsForRequest(pendingMediaRequest)) {
-                pendingMediaRequest.grant(pendingMediaRequest.getResources());
-            } else {
-                pendingMediaRequest.deny();
-                Toast.makeText(this, "يلزم منح الصلاحيات المطلوبة لتشغيل الداش كام", Toast.LENGTH_LONG).show();
+        if (requestCode == REQ_PERMISSIONS) {
+            if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "إذن الكاميرا ضروري لتشغيل التطبيق", Toast.LENGTH_LONG).show();
             }
-            pendingMediaRequest = null;
+            startLocation();
         }
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        if (webView != null) webView.onResume();
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    public void surfaceCreated(SurfaceHolder holder) {
+        openCamera(holder);
     }
 
-    @Override
-    protected void onPause() {
-        if (webView != null) webView.onPause();
+    private void openCamera(SurfaceHolder holder) {
+        try {
+            releaseCamera();
+            camera = Camera.open();
+            camera.setDisplayOrientation(0);
+            Camera.Parameters params = camera.getParameters();
+            if (params.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
+                params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+            }
+            camera.setParameters(params);
+            camera.setPreviewDisplay(holder);
+            camera.startPreview();
+            statusText.setText("الكاميرا جاهزة");
+        } catch (Exception e) {
+            statusText.setText("تعذر فتح الكاميرا");
+            Toast.makeText(this, "تعذر تشغيل الكاميرا: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        if (camera == null || recording) return;
+        try {
+            camera.stopPreview();
+            camera.setPreviewDisplay(holder);
+            camera.startPreview();
+        } catch (Exception ignored) { }
+    }
+
+    @Override public void surfaceDestroyed(SurfaceHolder holder) {
+        if (recording) stopRecording();
+        releaseCamera();
+    }
+
+    private void startRecording() {
+        if (camera == null) {
+            Toast.makeText(this, "الكاميرا غير جاهزة", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "DashCamTrip");
+            if (!dir.exists() && !dir.mkdirs()) throw new Exception("تعذر إنشاء مجلد الحفظ");
+            String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+            currentFile = new File(dir, "dashcam_" + stamp + ".mp4");
+
+            camera.unlock();
+            recorder = new MediaRecorder();
+            recorder.setCamera(camera);
+            recorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
+            recorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
+            CamcorderProfile profile;
+            if (CamcorderProfile.hasProfile(CamcorderProfile.QUALITY_480P)) {
+                profile = CamcorderProfile.get(CamcorderProfile.QUALITY_480P);
+            } else {
+                profile = CamcorderProfile.get(CamcorderProfile.QUALITY_LOW);
+            }
+            recorder.setProfile(profile);
+            recorder.setOutputFile(currentFile.getAbsolutePath());
+            recorder.setPreviewDisplay(preview.getHolder().getSurface());
+            recorder.prepare();
+            recorder.start();
+
+            recording = true;
+            recordButton.setText("إيقاف وحفظ");
+            statusText.setText("● جاري التسجيل");
+        } catch (Exception e) {
+            releaseRecorder();
+            try { camera.lock(); } catch (Exception ignored) { }
+            Toast.makeText(this, "تعذر بدء التسجيل: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void stopRecording() {
+        if (!recording) return;
+        try {
+            recorder.stop();
+        } catch (RuntimeException e) {
+            if (currentFile != null) currentFile.delete();
+        }
+        releaseRecorder();
+        recording = false;
+        recordButton.setText("ابدأ التسجيل");
+        statusText.setText("تم حفظ الفيديو");
+
+        try {
+            camera.lock();
+            camera.reconnect();
+            camera.setPreviewDisplay(preview.getHolder());
+            camera.startPreview();
+        } catch (Exception ignored) { }
+
+        if (currentFile != null && currentFile.exists()) {
+            MediaScannerConnection.scanFile(this,
+                    new String[]{currentFile.getAbsolutePath()},
+                    new String[]{"video/mp4"}, null);
+            Toast.makeText(this, "تم الحفظ في Movies/DashCamTrip", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void startLocation() {
+        try {
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 1f, this);
+        } catch (SecurityException ignored) {
+            speedText.setText("GPS غير متاح");
+        } catch (IllegalArgumentException ignored) {
+            speedText.setText("لا يوجد GPS");
+        }
+    }
+
+    @Override public void onLocationChanged(Location location) {
+        float kmh = location.hasSpeed() ? location.getSpeed() * 3.6f : 0f;
+        speedText.setText(Math.round(kmh) + " كم/س");
+    }
+    @Override public void onStatusChanged(String provider, int status, Bundle extras) { }
+    @Override public void onProviderEnabled(String provider) { }
+    @Override public void onProviderDisabled(String provider) { speedText.setText("GPS متوقف"); }
+
+    private void releaseRecorder() {
+        if (recorder != null) {
+            try { recorder.reset(); } catch (Exception ignored) { }
+            try { recorder.release(); } catch (Exception ignored) { }
+            recorder = null;
+        }
+    }
+
+    private void releaseCamera() {
+        if (camera != null) {
+            try { camera.stopPreview(); } catch (Exception ignored) { }
+            try { camera.release(); } catch (Exception ignored) { }
+            camera = null;
+        }
+    }
+
+    @Override protected void onPause() {
+        if (recording) stopRecording();
+        if (locationManager != null) {
+            try { locationManager.removeUpdates(this); } catch (SecurityException ignored) { }
+        }
+        releaseCamera();
         super.onPause();
     }
 
-    @Override
-    protected void onDestroy() {
-        if (webView != null) {
-            webView.destroy();
-            webView = null;
-        }
-        super.onDestroy();
-    }
-
-
-    public class NativeBridge {
-        @JavascriptInterface
-        public String saveVideoBase64(String fileName, String mimeType, String base64Data) {
-            try {
-                String safeName = sanitizeFileName(fileName);
-                if (safeName.length() == 0) safeName = "dashcam-video.mp4";
-                if (mimeType == null || mimeType.trim().length() == 0) mimeType = safeName.endsWith(".webm") ? "video/webm" : "video/mp4";
-
-                byte[] data = Base64.decode(base64Data, Base64.DEFAULT);
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    ContentResolver resolver = getContentResolver();
-                    ContentValues values = new ContentValues();
-                    values.put(MediaStore.Video.Media.DISPLAY_NAME, safeName);
-                    values.put(MediaStore.Video.Media.MIME_TYPE, mimeType);
-                    values.put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/DashCamTrip");
-                    values.put(MediaStore.Video.Media.IS_PENDING, 1);
-
-                    Uri uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
-                    if (uri == null) throw new Exception("تعذر إنشاء ملف الفيديو");
-
-                    OutputStream out = resolver.openOutputStream(uri);
-                    if (out == null) throw new Exception("تعذر فتح ملف الحفظ");
-                    try {
-                        out.write(data);
-                        out.flush();
-                    } finally {
-                        out.close();
-                    }
-
-                    values.clear();
-                    values.put(MediaStore.Video.Media.IS_PENDING, 0);
-                    resolver.update(uri, values, null, null);
-                    return "تم حفظ الفيديو في الاستديو: Movies/DashCamTrip ✅";
-                } else {
-                    File baseDir = getExternalFilesDir(Environment.DIRECTORY_MOVIES);
-                    if (baseDir == null) baseDir = getFilesDir();
-                    File dir = new File(baseDir, "DashCamTrip");
-                    if (!dir.exists()) dir.mkdirs();
-                    File file = new File(dir, safeName);
-                    FileOutputStream out = new FileOutputStream(file);
-                    try {
-                        out.write(data);
-                        out.flush();
-                    } finally {
-                        out.close();
-                    }
-                    MediaScannerConnection.scanFile(MainActivity.this, new String[]{file.getAbsolutePath()}, new String[]{mimeType}, null);
-                    return "تم حفظ الفيديو في Movies/DashCamTrip ✅";
-                }
-            } catch (Throwable t) {
-                return "تعذر حفظ الفيديو في الاستديو: " + (t.getMessage() == null ? "خطأ غير معروف" : t.getMessage());
-            }
-        }
-    }
-
-    private String sanitizeFileName(String name) {
-        if (name == null) return "";
-        String cleaned = name.replaceAll("[\\\\/:*?\"<>|]", "-").trim();
-        if (cleaned.length() > 90) cleaned = cleaned.substring(0, 90);
-        return cleaned;
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
+    @Override protected void onResume() {
+        super.onResume();
+        if (preview != null && preview.getHolder().getSurface().isValid()) openCamera(preview.getHolder());
+        startLocation();
     }
 }
