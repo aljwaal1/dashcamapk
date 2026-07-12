@@ -7,8 +7,21 @@ android {
         applicationId 'com.explapp.dashcamlegacy'
         minSdk 19
         targetSdk 28
-        versionCode 1
-        versionName '1.0.0-legacy'
+        versionCode 2
+        versionName '1.1.0-functional'
     }
-    buildTypes { release { minifyEnabled false } }
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_7
+        targetCompatibility JavaVersion.VERSION_1_7
+    }
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
 }
