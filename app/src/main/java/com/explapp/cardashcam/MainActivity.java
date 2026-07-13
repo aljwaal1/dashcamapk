@@ -421,6 +421,8 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
     }
 
     private View buildSettingsScreen() {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(14), dp(14), dp(14), dp(14));
@@ -447,7 +449,8 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
         LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
         hintParams.setMargins(0, dp(16), 0, 0);
         page.addView(hint, hintParams);
-        return page;
+        scroll.addView(page);
+        return scroll;
     }
 
     private View sectionTitle(String titleValue, String detailValue) {
@@ -808,6 +811,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
 
     @Override protected void onPause() {
         if (recording) stopRecording(false);
+        if (videoPlayer != null) { videoPlayer.stopPlayback(); videoPlayer = null; }
         releaseCamera();
         if (locationManager != null) {
             try { locationManager.removeUpdates(this); } catch (Exception ignored) { }
@@ -833,6 +837,8 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
                     .setPositiveButton("حفظ وخروج", new DialogInterface.OnClickListener() {
                         @Override public void onClick(DialogInterface dialog, int which) { stopRecording(true); finish(); }
                     }).show();
+        } else if (videoPlayer != null || activeScreen != 0) {
+            showScreen(videoPlayer != null ? 1 : 0);
         } else super.onBackPressed();
     }
 
