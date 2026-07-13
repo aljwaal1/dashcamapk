@@ -1,6 +1,7 @@
 package com.explapp.cardashcam;
 
 import android.Manifest;
+import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
@@ -222,6 +223,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
         if (!missing.isEmpty()) requestPermissions(missing.toArray(new String[missing.size()]), REQUEST_PERMISSIONS);
     }
 
+    @TargetApi(23)
     private void addIfMissing(List<String> permissions, String permission) {
         if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) permissions.add(permission);
     }
