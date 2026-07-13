@@ -20,6 +20,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.media.MediaController;
 import android.view.Gravity;
 import android.view.Surface;
 import android.view.SurfaceHolder;
@@ -28,11 +29,14 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
+import android.view.animation.AlphaAnimation;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.VideoView;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -81,6 +85,14 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
     private Button recordButton;
     private Button switchButton;
     private Button audioButton;
+    private FrameLayout screenHost;
+    private TextView headerTitle;
+    private TextView headerSubtitle;
+    private TextView recordNav;
+    private TextView libraryNav;
+    private TextView settingsNav;
+    private VideoView videoPlayer;
+    private int activeScreen;
     private final Handler handler = new Handler();
     private final SimpleDateFormat clockFormat = new SimpleDateFormat("yyyy-MM-dd  HH:mm:ss", Locale.US);
 
@@ -122,14 +134,36 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
 
         LinearLayout titles = new LinearLayout(this);
         titles.setOrientation(LinearLayout.VERTICAL);
-        TextView title = text("داش كام الرحلة", 20, Color.WHITE, Typeface.BOLD);
-        TextView subtitle = text("تسجيل سريع وآمن • Android 4.4+", 12, Color.rgb(186, 230, 253), Typeface.NORMAL);
-        titles.addView(title);
-        titles.addView(subtitle);
+        headerTitle = text("داش كام الرحلة", 20, Color.WHITE, Typeface.BOLD);
+        headerSubtitle = text("تسجيل سريع وآمن • Android 4.4+", 12, Color.rgb(186, 230, 253), Typeface.NORMAL);
+        titles.addView(headerTitle);
+        titles.addView(headerSubtitle);
         header.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         cameraLabel = badge("خلفية", BLUE);
         header.addView(cameraLabel);
         root.addView(header);
+
+        screenHost = new FrameLayout(this);
+        root.addView(screenHost, new LinearLayout.LayoutParams(-1, 0, 1));
+
+        LinearLayout navigation = new LinearLayout(this);
+        navigation.setGravity(Gravity.CENTER);
+        navigation.setPadding(dp(8), dp(5), dp(8), dp(7));
+        navigation.setBackgroundColor(Color.WHITE);
+        recordNav = navItem("●\nالتسجيل", 0);
+        libraryNav = navItem("▤\nالمقاطع", 1);
+        settingsNav = navItem("◆\nالإعدادات", 2);
+        navigation.addView(recordNav, new LinearLayout.LayoutParams(0, dp(55), 1));
+        navigation.addView(libraryNav, new LinearLayout.LayoutParams(0, dp(55), 1));
+        navigation.addView(settingsNav, new LinearLayout.LayoutParams(0, dp(55), 1));
+        root.addView(navigation);
+        setContentView(root);
+        showScreen(0);
+    }
+
+    private View buildCameraScreen() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
 
         previewFrame = new PreviewFrame(this);
         previewFrame.setBackgroundColor(Color.BLACK);
@@ -211,7 +245,239 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
         safety.setGravity(Gravity.CENTER);
         safety.setPadding(dp(8), dp(6), dp(8), dp(8));
         root.addView(safety);
-        setContentView(root);
+        return root;
+    }
+
+    private TextView navItem(String label, final int destination) {
+        TextView item = text(label, 11, SLATE, Typeface.BOLD);
+        item.setGravity(Gravity.CENTER);
+        item.setLines(2);
+        item.setBackground(rounded(Color.TRANSPARENT, dp(14)));
+        item.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View view) { showScreen(destination); }
+        });
+        return item;
+    }
+
+    private void showScreen(int destination) {
+        if (recording && destination != 0) {
+            Toast.makeText(this, "أوقف التسجيل قبل مغادرة شاشة الكاميرا", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (videoPlayer != null) { videoPlayer.stopPlayback(); videoPlayer = null; }
+        activeScreen = destination;
+        screenHost.removeAllViews();
+        View screen;
+        if (destination == 1) screen = buildLibraryScreen();
+        else if (destination == 2) screen = buildSettingsScreen();
+        else screen = buildCameraScreen();
+        screenHost.addView(screen, new FrameLayout.LayoutParams(-1, -1));
+        AlphaAnimation animation = new AlphaAnimation(0.25f, 1f);
+        animation.setDuration(180);
+        screen.startAnimation(animation);
+        updateNavigation();
+    }
+
+    private void updateNavigation() {
+        recordNav.setTextColor(activeScreen == 0 ? BLUE : SLATE);
+        libraryNav.setTextColor(activeScreen == 1 ? BLUE : SLATE);
+        settingsNav.setTextColor(activeScreen == 2 ? BLUE : SLATE);
+        recordNav.setBackground(rounded(activeScreen == 0 ? Color.rgb(224, 242, 254) : Color.TRANSPARENT, dp(14)));
+        libraryNav.setBackground(rounded(activeScreen == 1 ? Color.rgb(224, 242, 254) : Color.TRANSPARENT, dp(14)));
+        settingsNav.setBackground(rounded(activeScreen == 2 ? Color.rgb(224, 242, 254) : Color.TRANSPARENT, dp(14)));
+        cameraLabel.setVisibility(activeScreen == 0 ? View.VISIBLE : View.GONE);
+        if (activeScreen == 0) {
+            headerTitle.setText("داش كام الرحلة");
+            headerSubtitle.setText("تسجيل سريع وآمن • Android 4.4+");
+        } else if (activeScreen == 1) {
+            headerTitle.setText("مكتبة الرحلات");
+            headerSubtitle.setText("شاهد المقاطع وأدر مساحة الحفظ");
+        } else {
+            headerTitle.setText("إعدادات التسجيل");
+            headerSubtitle.setText("جودة مناسبة لجهازك ومساحتك");
+        }
+    }
+
+    private View buildLibraryScreen() {
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(14), dp(14), dp(14), dp(10));
+        TextView summary = text(storageSummary(), 14, NAVY, Typeface.BOLD);
+        summary.setPadding(dp(14), dp(12), dp(14), dp(12));
+        summary.setBackground(rounded(Color.WHITE, dp(16)));
+        page.addView(summary);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(0, dp(8), 0, dp(8));
+        List<File> recordings = recordingFiles();
+        if (recordings.isEmpty()) {
+            LinearLayout empty = new LinearLayout(this);
+            empty.setOrientation(LinearLayout.VERTICAL);
+            empty.setGravity(Gravity.CENTER);
+            empty.setPadding(dp(20), dp(60), dp(20), dp(30));
+            TextView art = text("◉", 58, Color.rgb(186, 230, 253), Typeface.BOLD);
+            art.setGravity(Gravity.CENTER);
+            TextView emptyTitle = text("لا توجد مقاطع بعد", 18, NAVY, Typeface.BOLD);
+            emptyTitle.setGravity(Gravity.CENTER);
+            TextView emptyText = text("ابدأ تسجيل رحلة وستظهر هنا تلقائياً", 13, SLATE, Typeface.NORMAL);
+            emptyText.setGravity(Gravity.CENTER);
+            emptyText.setPadding(0, dp(8), 0, 0);
+            empty.addView(art);
+            empty.addView(emptyTitle);
+            empty.addView(emptyText);
+            list.addView(empty, new LinearLayout.LayoutParams(-1, -2));
+        } else {
+            for (int i = 0; i < recordings.size(); i++) list.addView(recordingCard(recordings.get(i), i + 1));
+        }
+        scroll.addView(list);
+        page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        return page;
+    }
+
+    private List<File> recordingFiles() {
+        File[] files = recordingsDirectory().listFiles();
+        ArrayList<File> result = new ArrayList<File>();
+        if (files != null) {
+            for (File file : files) if (file.isFile() && file.getName().toLowerCase(Locale.US).endsWith(".mp4")) result.add(file);
+        }
+        Collections.sort(result, new Comparator<File>() {
+            @Override public int compare(File first, File second) {
+                return first.lastModified() < second.lastModified() ? 1 : first.lastModified() == second.lastModified() ? 0 : -1;
+            }
+        });
+        return result;
+    }
+
+    private View recordingCard(final File file, int position) {
+        LinearLayout card = new LinearLayout(this);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(14), dp(12), dp(10), dp(12));
+        card.setBackground(rounded(Color.WHITE, dp(16)));
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(-1, -2);
+        cardParams.setMargins(0, dp(5), 0, dp(5));
+        card.setLayoutParams(cardParams);
+        TextView icon = badge("▶", position % 2 == 0 ? NAVY : BLUE);
+        card.addView(icon);
+        LinearLayout details = new LinearLayout(this);
+        details.setOrientation(LinearLayout.VERTICAL);
+        details.setPadding(dp(12), 0, dp(8), 0);
+        TextView name = text("رحلة " + new SimpleDateFormat("dd MMM • HH:mm", new Locale("ar")).format(new Date(file.lastModified())), 14, NAVY, Typeface.BOLD);
+        TextView meta = text(formatFileSize(file.length()) + "  •  MP4", 12, SLATE, Typeface.NORMAL);
+        details.addView(name);
+        details.addView(meta);
+        card.addView(details, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView more = text("تشغيل", 12, BLUE, Typeface.BOLD);
+        more.setPadding(dp(10), dp(10), dp(10), dp(10));
+        card.addView(more);
+        card.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View view) { showPlayer(file); }
+        });
+        card.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override public boolean onLongClick(View view) { confirmDelete(file); return true; }
+        });
+        return card;
+    }
+
+    private void showPlayer(final File file) {
+        screenHost.removeAllViews();
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(12), dp(12), dp(12), dp(12));
+        videoPlayer = new VideoView(this);
+        videoPlayer.setBackgroundColor(Color.BLACK);
+        MediaController controls = new MediaController(this);
+        controls.setAnchorView(videoPlayer);
+        videoPlayer.setMediaController(controls);
+        videoPlayer.setVideoPath(file.getAbsolutePath());
+        page.addView(videoPlayer, new LinearLayout.LayoutParams(-1, 0, 1));
+        LinearLayout actions = new LinearLayout(this);
+        actions.setPadding(0, dp(10), 0, 0);
+        Button back = actionButton("العودة للمقاطع", NAVY);
+        back.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { showScreen(1); } });
+        Button delete = actionButton("حذف المقطع", RED);
+        delete.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { confirmDelete(file); } });
+        actions.addView(back, buttonParams());
+        actions.addView(delete, buttonParams());
+        page.addView(actions);
+        screenHost.addView(page, new FrameLayout.LayoutParams(-1, -1));
+        videoPlayer.start();
+    }
+
+    private void confirmDelete(final File file) {
+        new AlertDialog.Builder(this).setTitle("حذف المقطع؟")
+                .setMessage("لن يمكن استعادة هذا المقطع بعد الحذف.")
+                .setNegativeButton("إلغاء", null)
+                .setPositiveButton("حذف", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) {
+                        if (videoPlayer != null) { videoPlayer.stopPlayback(); videoPlayer = null; }
+                        boolean deleted = file.delete();
+                        Toast.makeText(MainActivity.this, deleted ? "تم حذف المقطع" : "تعذر حذف المقطع", Toast.LENGTH_SHORT).show();
+                        showScreen(1);
+                    }
+                }).show();
+    }
+
+    private View buildSettingsScreen() {
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(14), dp(14), dp(14), dp(14));
+        page.addView(sectionTitle("جودة الفيديو", "اختر توازناً مناسباً بين الوضوح والمساحة"));
+        LinearLayout quality = new LinearLayout(this);
+        quality.setPadding(0, dp(9), 0, dp(16));
+        String selected = getPreferences(MODE_PRIVATE).getString("quality", "720");
+        quality.addView(qualityButton("اقتصادية\n480p", "480", selected), buttonParams());
+        quality.addView(qualityButton("متوازنة\n720p", "720", selected), buttonParams());
+        quality.addView(qualityButton("أخف\nمنخفضة", "low", selected), buttonParams());
+        page.addView(quality);
+        page.addView(sectionTitle("صوت الرحلة", "يمكن تغييره فقط قبل بدء التسجيل"));
+        final Button audioSetting = actionButton(audioEnabled ? "الصوت مفعّل" : "الصوت غير مفعّل", audioEnabled ? GREEN : SLATE);
+        audioSetting.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View view) { toggleAudio(); showScreen(2); }
+        });
+        LinearLayout.LayoutParams wide = new LinearLayout.LayoutParams(-1, dp(54));
+        wide.setMargins(0, dp(9), 0, dp(16));
+        page.addView(audioSetting, wide);
+        page.addView(sectionTitle("مساحة التخزين", storageSummary() + "\nالحفظ داخل Movies/DashCamTrip"));
+        TextView hint = text("نصيحة: جودة 720p مناسبة لمعظم أجهزة Android 4.4. التطبيق يخفض الجودة تلقائياً إذا لم يدعمها الجهاز.", 12, Color.rgb(71, 85, 105), Typeface.NORMAL);
+        hint.setPadding(dp(14), dp(14), dp(14), dp(14));
+        hint.setBackground(rounded(Color.rgb(224, 242, 254), dp(16)));
+        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
+        hintParams.setMargins(0, dp(16), 0, 0);
+        page.addView(hint, hintParams);
+        return page;
+    }
+
+    private View sectionTitle(String titleValue, String detailValue) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(14), dp(12), dp(14), dp(12));
+        card.setBackground(rounded(Color.WHITE, dp(16)));
+        card.addView(text(titleValue, 16, NAVY, Typeface.BOLD));
+        TextView detail = text(detailValue, 12, SLATE, Typeface.NORMAL);
+        detail.setPadding(0, dp(4), 0, 0);
+        card.addView(detail);
+        return card;
+    }
+
+    private Button qualityButton(String label, final String value, String selected) {
+        final boolean active = value.equals(selected);
+        Button button = actionButton(label, active ? BLUE : SLATE);
+        button.setTextSize(11);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View view) {
+                getPreferences(MODE_PRIVATE).edit().putString("quality", value).apply();
+                showScreen(2);
+            }
+        });
+        return button;
+    }
+
+    private String formatFileSize(long bytes) {
+        if (bytes >= 1024L * 1024L) return (bytes / (1024L * 1024L)) + " MB";
+        return Math.max(1L, bytes / 1024L) + " KB";
     }
 
     private void requestNeededPermissions() {
@@ -443,8 +709,9 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
     }
 
     private CamcorderProfile bestProfile(int id) {
-        if (CamcorderProfile.hasProfile(id, CamcorderProfile.QUALITY_720P)) return CamcorderProfile.get(id, CamcorderProfile.QUALITY_720P);
-        if (CamcorderProfile.hasProfile(id, CamcorderProfile.QUALITY_480P)) return CamcorderProfile.get(id, CamcorderProfile.QUALITY_480P);
+        String quality = getPreferences(MODE_PRIVATE).getString("quality", "720");
+        if ("720".equals(quality) && CamcorderProfile.hasProfile(id, CamcorderProfile.QUALITY_720P)) return CamcorderProfile.get(id, CamcorderProfile.QUALITY_720P);
+        if (!"low".equals(quality) && CamcorderProfile.hasProfile(id, CamcorderProfile.QUALITY_480P)) return CamcorderProfile.get(id, CamcorderProfile.QUALITY_480P);
         return CamcorderProfile.get(id, CamcorderProfile.QUALITY_LOW);
     }
 

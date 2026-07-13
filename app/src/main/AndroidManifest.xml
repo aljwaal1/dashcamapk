@@ -14,7 +14,7 @@
         android:allowBackup="true"
         android:theme="@style/AppTheme"
         android:label="داش كام الرحلة"
-        android:icon="@drawable/icon_512">
+        android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
             android:exported="true"
