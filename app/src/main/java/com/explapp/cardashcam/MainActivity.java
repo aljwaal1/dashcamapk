@@ -4,7 +4,6 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -16,12 +15,10 @@ import android.location.LocationManager;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.media.MediaScannerConnection;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
-import android.provider.Settings;
 import android.view.Gravity;
 import android.view.Surface;
 import android.view.SurfaceHolder;
@@ -48,6 +45,10 @@ import java.util.Locale;
 @SuppressWarnings("deprecation")
 public class MainActivity extends Activity implements SurfaceHolder.Callback, LocationListener {
     private static final int REQUEST_PERMISSIONS = 81;
+    private static final int REQUEST_AUDIO = 82;
+    private static final long MIN_FREE_BYTES = 150L * 1024L * 1024L;
+    private static final long RESERVED_BYTES = 100L * 1024L * 1024L;
+    private static final long MAX_RECORDING_BYTES = 1500L * 1024L * 1024L;
     private static final int NAVY = Color.rgb(7, 17, 31);
     private static final int BLUE = Color.rgb(14, 165, 233);
     private static final int RED = Color.rgb(239, 68, 68);
@@ -55,6 +56,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
     private static final int SLATE = Color.rgb(100, 116, 139);
 
     private SurfaceView preview;
+    private PreviewFrame previewFrame;
     private SurfaceHolder surfaceHolder;
     private Camera camera;
     private MediaRecorder recorder;
@@ -63,6 +65,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
     private boolean surfaceReady;
     private boolean recording;
     private boolean audioEnabled;
+    private boolean pendingAudioEnable;
     private long startedAt;
     private float speedKmh;
     private float maxSpeed;
@@ -96,7 +99,6 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (Build.VERSION.SDK_INT >= 21) {
             getWindow().setStatusBarColor(NAVY);
             getWindow().setNavigationBarColor(NAVY);
@@ -128,13 +130,14 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
         header.addView(cameraLabel);
         root.addView(header);
 
-        FrameLayout cameraFrame = new FrameLayout(this);
-        cameraFrame.setBackgroundColor(Color.BLACK);
+        previewFrame = new PreviewFrame(this);
+        previewFrame.setBackgroundColor(Color.BLACK);
         preview = new SurfaceView(this);
         surfaceHolder = preview.getHolder();
         surfaceHolder.addCallback(this);
         surfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
-        cameraFrame.addView(preview, new FrameLayout.LayoutParams(-1, -1));
+        previewFrame.setPreview(preview);
+        previewFrame.addView(preview, new FrameLayout.LayoutParams(-1, -1));
 
         LinearLayout topOverlay = new LinearLayout(this);
         topOverlay.setGravity(Gravity.CENTER_VERTICAL);
@@ -147,7 +150,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
         clockParams.leftMargin = dp(8);
         topOverlay.addView(clockText, clockParams);
         FrameLayout.LayoutParams topParams = new FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP);
-        cameraFrame.addView(topOverlay, topParams);
+        previewFrame.addView(topOverlay, topParams);
 
         LinearLayout speedPanel = new LinearLayout(this);
         speedPanel.setOrientation(LinearLayout.VERTICAL);
@@ -160,11 +163,11 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
         speedPanel.addView(unit);
         FrameLayout.LayoutParams speedParams = new FrameLayout.LayoutParams(dp(94), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.RIGHT);
         speedParams.setMargins(0, 0, dp(12), dp(12));
-        cameraFrame.addView(speedPanel, speedParams);
+        previewFrame.addView(speedPanel, speedParams);
 
         LinearLayout.LayoutParams cameraParams = new LinearLayout.LayoutParams(-1, 0, 1);
         cameraParams.setMargins(dp(10), dp(10), dp(10), 0);
-        root.addView(cameraFrame, cameraParams);
+        root.addView(previewFrame, cameraParams);
 
         LinearLayout dashboard = new LinearLayout(this);
         dashboard.setGravity(Gravity.CENTER_VERTICAL);
@@ -214,7 +217,6 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
         if (Build.VERSION.SDK_INT < 23) return;
         ArrayList<String> missing = new ArrayList<String>();
         addIfMissing(missing, Manifest.permission.CAMERA);
-        addIfMissing(missing, Manifest.permission.RECORD_AUDIO);
         addIfMissing(missing, Manifest.permission.ACCESS_FINE_LOCATION);
         if (Build.VERSION.SDK_INT <= 28) addIfMissing(missing, Manifest.permission.WRITE_EXTERNAL_STORAGE);
         if (!missing.isEmpty()) requestPermissions(missing.toArray(new String[missing.size()]), REQUEST_PERMISSIONS);
@@ -226,7 +228,19 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_PERMISSIONS && surfaceReady) openCamera(cameraId);
+        if (requestCode == REQUEST_AUDIO) {
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            pendingAudioEnable = false;
+            if (granted) setAudioEnabled(true); else {
+                setAudioEnabled(false);
+                Toast.makeText(this, "لن يُسجل الصوت دون إذن الميكروفون", Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
+        if (requestCode == REQUEST_PERMISSIONS) {
+            if (surfaceReady) openCamera(cameraId);
+            if (camera != null) startLocation();
+        }
     }
 
     @Override public void surfaceCreated(SurfaceHolder holder) {
@@ -240,6 +254,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
 
     @Override public void surfaceDestroyed(SurfaceHolder holder) {
         surfaceReady = false;
+        if (recording) stopRecording(false);
         releaseCamera();
     }
 
@@ -271,7 +286,12 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
         Camera.Parameters params = camera.getParameters();
         List<Camera.Size> sizes = params.getSupportedPreviewSizes();
         Camera.Size best = chooseSize(sizes, 1280, 720);
-        if (best != null) params.setPreviewSize(best.width, best.height);
+        if (best != null) {
+            params.setPreviewSize(best.width, best.height);
+            int orientation = displayOrientation(cameraId);
+            float ratio = (orientation == 90 || orientation == 270) ? best.height / (float) best.width : best.width / (float) best.height;
+            previewFrame.setPreviewAspect(ratio);
+        }
         if (params.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
             params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
         }
@@ -332,7 +352,18 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
             Toast.makeText(this, "غيّر إعداد الصوت قبل بدء التسجيل", Toast.LENGTH_SHORT).show();
             return;
         }
-        audioEnabled = !audioEnabled;
+        if (!audioEnabled && Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            if (!pendingAudioEnable) {
+                pendingAudioEnable = true;
+                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_AUDIO);
+            }
+            return;
+        }
+        setAudioEnabled(!audioEnabled);
+    }
+
+    private void setAudioEnabled(boolean enabled) {
+        audioEnabled = enabled;
         getPreferences(MODE_PRIVATE).edit().putBoolean("audio", audioEnabled).apply();
         audioButton.setText(audioEnabled ? "الصوت: نعم" : "الصوت: لا");
         audioButton.setBackground(rounded(audioEnabled ? GREEN : SLATE, dp(16)));
@@ -344,12 +375,19 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
             return;
         }
         if (audioEnabled && Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestNeededPermissions();
+            pendingAudioEnable = true;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_AUDIO);
             return;
         }
         File directory = recordingsDirectory();
         if (!directory.exists() && !directory.mkdirs()) {
             Toast.makeText(this, "تعذر إنشاء مجلد الحفظ", Toast.LENGTH_LONG).show();
+            return;
+        }
+        long available = availableBytes(directory);
+        if (available < MIN_FREE_BYTES) {
+            Toast.makeText(this, "المساحة المتاحة أقل من 150 MB. حرر مساحة قبل التسجيل", Toast.LENGTH_LONG).show();
+            storageText.setText(storageSummary());
             return;
         }
         currentFile = new File(directory, "DASH_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".mp4");
@@ -370,14 +408,22 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
                 recorder.setVideoEncodingBitRate(Math.min(profile.videoBitRate, 5000000));
             }
             recorder.setOutputFile(currentFile.getAbsolutePath());
+            long safeLimit = Math.min(MAX_RECORDING_BYTES, available - RESERVED_BYTES);
+            if (safeLimit > 10L * 1024L * 1024L) recorder.setMaxFileSize(safeLimit);
             recorder.setPreviewDisplay(surfaceHolder.getSurface());
             recorder.setOrientationHint(recordingOrientation(cameraId));
             recorder.setOnErrorListener(new MediaRecorder.OnErrorListener() {
                 @Override public void onError(MediaRecorder mediaRecorder, int what, int extra) { stopRecording(false); }
             });
+            recorder.setOnInfoListener(new MediaRecorder.OnInfoListener() {
+                @Override public void onInfo(MediaRecorder mediaRecorder, int what, int extra) {
+                    if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED || what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) stopRecording(true);
+                }
+            });
             recorder.prepare();
             recorder.start();
             recording = true;
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             startedAt = System.currentTimeMillis();
             maxSpeed = 0;
             recordButton.setText("إيقاف وحفظ");
@@ -412,7 +458,14 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
     private void stopRecording(boolean userRequested) {
         if (!recording) return;
         recording = false;
-        try { recorder.stop(); } catch (RuntimeException e) { if (currentFile != null) currentFile.delete(); }
+        boolean saved = false;
+        try {
+            recorder.stop();
+            saved = currentFile != null && currentFile.exists() && currentFile.length() > 1024L;
+            if (!saved && currentFile != null) currentFile.delete();
+        } catch (RuntimeException e) {
+            if (currentFile != null) currentFile.delete();
+        }
         releaseRecorder();
         try { camera.lock(); startPreview(); } catch (Exception ignored) { }
         recordButton.setText("بدء التسجيل");
@@ -420,11 +473,14 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
         switchButton.setEnabled(Camera.getNumberOfCameras() > 1);
         audioButton.setEnabled(true);
         timerText.setBackground(rounded(GREEN, dp(16)));
-        statusText.setText("تم الحفظ • أعلى سرعة " + Math.round(maxSpeed) + " كم/س");
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        statusText.setText(saved ? "تم الحفظ • أعلى سرعة " + Math.round(maxSpeed) + " كم/س" : "فشل حفظ المقطع • حاول تسجيل مقطع أطول");
         storageText.setText(storageSummary());
-        if (currentFile != null && currentFile.exists() && currentFile.length() > 0) {
+        if (saved) {
             MediaScannerConnection.scanFile(this, new String[]{currentFile.getAbsolutePath()}, new String[]{"video/mp4"}, null);
             if (userRequested) Toast.makeText(this, "تم حفظ الفيديو في مجلد DashCamTrip", Toast.LENGTH_LONG).show();
+        } else if (userRequested) {
+            Toast.makeText(this, "لم يتم حفظ الفيديو", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -441,8 +497,14 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
         File dir = recordingsDirectory();
         File[] files = dir.listFiles();
         int count = files == null ? 0 : files.length;
-        long freeMb = dir.getUsableSpace() / (1024L * 1024L);
+        long freeMb = availableBytes(dir) / (1024L * 1024L);
         return count + " مقطع • " + freeMb + " MB متاح";
+    }
+
+    private long availableBytes(File directory) {
+        File probe = directory;
+        while (probe != null && !probe.exists()) probe = probe.getParentFile();
+        return probe == null ? 0 : probe.getUsableSpace();
     }
 
     private void startLocation() {
@@ -452,7 +514,8 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
     }
 
     @Override public void onLocationChanged(Location location) {
-        speedKmh = location.hasSpeed() ? Math.max(0, location.getSpeed() * 3.6f) : 0;
+        boolean reliable = location.hasSpeed() && (!location.hasAccuracy() || location.getAccuracy() <= 50f);
+        speedKmh = reliable ? Math.max(0, Math.min(250f, location.getSpeed() * 3.6f)) : 0;
         if (recording && speedKmh > maxSpeed) maxSpeed = speedKmh;
     }
     @Override public void onProviderDisabled(String provider) { statusText.setText("فعّل GPS لعرض السرعة"); }
@@ -524,6 +587,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
     private Button actionButton(String value, int color) {
         Button button = new Button(this);
         button.setText(value);
+        button.setAllCaps(false);
         button.setTextSize(13);
         button.setTextColor(Color.WHITE);
         button.setTypeface(Typeface.DEFAULT_BOLD);
@@ -552,5 +616,23 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Lo
     private String formatDuration(long milliseconds) {
         long total = milliseconds / 1000;
         return String.format(Locale.US, "%02d:%02d", total / 60, total % 60);
+    }
+
+    /** Keeps the camera preview correctly proportioned and center-cropped instead of stretched. */
+    private static final class PreviewFrame extends FrameLayout {
+        private SurfaceView preview;
+        private float previewAspect;
+        PreviewFrame(Activity context) { super(context); setClipChildren(true); }
+        void setPreview(SurfaceView value) { preview = value; }
+        void setPreviewAspect(float value) { previewAspect = value; requestLayout(); }
+        @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+            super.onLayout(changed, left, top, right, bottom);
+            if (preview == null || previewAspect <= 0f) return;
+            int width = right - left, height = bottom - top;
+            int childWidth = width, childHeight = Math.round(width / previewAspect);
+            if (childHeight < height) { childHeight = height; childWidth = Math.round(height * previewAspect); }
+            int childLeft = (width - childWidth) / 2, childTop = (height - childHeight) / 2;
+            preview.layout(childLeft, childTop, childLeft + childWidth, childTop + childHeight);
+        }
     }
 }
