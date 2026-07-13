@@ -16,7 +16,7 @@ public class SoundMainActivity extends MainActivity {
     private ToneGenerator uiTones;
     private long lastSoundAt;
 
-    @Override protected void onCreate(Bundle savedInstanceState) {
+    @Override public void onCreate(Bundle savedInstanceState) {
         uiTones = new ToneGenerator(AudioManager.STREAM_MUSIC, 48);
         super.onCreate(savedInstanceState);
     }
