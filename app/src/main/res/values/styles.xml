@@ -6,5 +6,7 @@
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:statusBarColor">#07111F</item>
         <item name="android:navigationBarColor">#07111F</item>
+        <item name="android:windowBackground">#EEF3F8</item>
+        <item name="android:colorAccent">#0EA5E9</item>
     </style>
 </resources>

@@ -2,8 +2,13 @@ package com.explapp.cardashcam;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.hardware.Camera;
 import android.location.Location;
 import android.location.LocationListener;
@@ -11,13 +16,18 @@ import android.location.LocationManager;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.media.MediaScannerConnection;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.provider.Settings;
 import android.view.Gravity;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -28,331 +38,519 @@ import android.widget.Toast;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
+@SuppressWarnings("deprecation")
 public class MainActivity extends Activity implements SurfaceHolder.Callback, LocationListener {
-    private static final int REQ_PERMISSIONS = 44;
+    private static final int REQUEST_PERMISSIONS = 81;
+    private static final int NAVY = Color.rgb(7, 17, 31);
+    private static final int BLUE = Color.rgb(14, 165, 233);
+    private static final int RED = Color.rgb(239, 68, 68);
+    private static final int GREEN = Color.rgb(16, 185, 129);
+    private static final int SLATE = Color.rgb(100, 116, 139);
 
-    private final Handler timerHandler = new Handler();
     private SurfaceView preview;
+    private SurfaceHolder surfaceHolder;
     private Camera camera;
     private MediaRecorder recorder;
+    private LocationManager locationManager;
+    private int cameraId = -1;
+    private boolean surfaceReady;
     private boolean recording;
-    private boolean recordAudio;
+    private boolean audioEnabled;
+    private long startedAt;
+    private float speedKmh;
+    private float maxSpeed;
     private File currentFile;
+
     private TextView speedText;
+    private TextView clockText;
     private TextView statusText;
     private TextView timerText;
+    private TextView cameraLabel;
+    private TextView storageText;
     private Button recordButton;
+    private Button switchButton;
     private Button audioButton;
-    private Button cameraButton;
-    private LocationManager locationManager;
-    private int cameraId = Camera.CameraInfo.CAMERA_FACING_BACK;
-    private long recordingStartedAt;
+    private final Handler handler = new Handler();
+    private final SimpleDateFormat clockFormat = new SimpleDateFormat("yyyy-MM-dd  HH:mm:ss", Locale.US);
 
-    private final Runnable timerTick = new Runnable() {
+    private final Runnable ticker = new Runnable() {
         @Override public void run() {
-            if (!recording) return;
-            long seconds = Math.max(0L, (System.currentTimeMillis() - recordingStartedAt) / 1000L);
-            long minutes = seconds / 60L;
-            seconds %= 60L;
-            timerText.setText(String.format(Locale.US, "%02d:%02d", minutes, seconds));
-            timerHandler.postDelayed(this, 500L);
+            clockText.setText(clockFormat.format(new Date()));
+            if (recording) {
+                timerText.setText("REC  " + formatDuration(System.currentTimeMillis() - startedAt));
+            } else {
+                timerText.setText("جاهز للتسجيل");
+            }
+            speedText.setText(String.valueOf(Math.round(speedKmh)));
+            handler.postDelayed(this, 1000);
         }
     };
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-        FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.BLACK);
-
-        preview = new SurfaceView(this);
-        preview.getHolder().addCallback(this);
-        root.addView(preview, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-
-        LinearLayout topBar = new LinearLayout(this);
-        topBar.setOrientation(LinearLayout.HORIZONTAL);
-        topBar.setGravity(Gravity.CENTER_VERTICAL);
-        topBar.setPadding(dp(12), dp(7), dp(12), dp(7));
-        topBar.setBackgroundColor(0xAA000000);
-
-        statusText = label("جاهز للتسجيل", Gravity.LEFT);
-        timerText = label("00:00", Gravity.CENTER);
-        speedText = label("0 كم/س", Gravity.RIGHT);
-        topBar.addView(statusText, new LinearLayout.LayoutParams(0, dp(46), 1.4f));
-        topBar.addView(timerText, new LinearLayout.LayoutParams(0, dp(46), .7f));
-        topBar.addView(speedText, new LinearLayout.LayoutParams(0, dp(46), 1f));
-        root.addView(topBar, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(60), Gravity.TOP));
-
-        LinearLayout controls = new LinearLayout(this);
-        controls.setOrientation(LinearLayout.HORIZONTAL);
-        controls.setGravity(Gravity.CENTER);
-        controls.setPadding(dp(8), dp(7), dp(8), dp(7));
-        controls.setBackgroundColor(0xAA000000);
-
-        audioButton = controlButton("الصوت: مغلق");
-        audioButton.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                if (recording) {
-                    Toast.makeText(MainActivity.this, "غيّر إعداد الصوت قبل بدء التسجيل", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                recordAudio = !recordAudio;
-                audioButton.setText(recordAudio ? "الصوت: يعمل" : "الصوت: مغلق");
-            }
-        });
-
-        recordButton = controlButton("ابدأ التسجيل");
-        recordButton.setTextSize(18);
-        recordButton.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                if (recording) stopRecording(); else startRecording();
-            }
-        });
-
-        cameraButton = controlButton("تبديل الكاميرا");
-        cameraButton.setEnabled(Camera.getNumberOfCameras() > 1);
-        cameraButton.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                if (recording) {
-                    Toast.makeText(MainActivity.this, "أوقف التسجيل أولاً", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                cameraId = cameraId == Camera.CameraInfo.CAMERA_FACING_BACK
-                        ? Camera.CameraInfo.CAMERA_FACING_FRONT
-                        : Camera.CameraInfo.CAMERA_FACING_BACK;
-                openCamera(preview.getHolder());
-            }
-        });
-
-        controls.addView(audioButton, new LinearLayout.LayoutParams(0, dp(54), 1f));
-        controls.addView(recordButton, new LinearLayout.LayoutParams(0, dp(58), 1.35f));
-        controls.addView(cameraButton, new LinearLayout.LayoutParams(0, dp(54), 1f));
-        root.addView(controls, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(72), Gravity.BOTTOM));
-
-        setContentView(root);
-        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (Build.VERSION.SDK_INT >= 21) {
+            getWindow().setStatusBarColor(NAVY);
+            getWindow().setNavigationBarColor(NAVY);
+        }
+        audioEnabled = getPreferences(MODE_PRIVATE).getBoolean("audio", false);
+        buildInterface();
+        handler.post(ticker);
         requestNeededPermissions();
     }
 
-    private TextView label(String text, int gravity) {
-        TextView view = new TextView(this);
-        view.setText(text);
-        view.setTextColor(Color.WHITE);
-        view.setTextSize(19);
-        view.setGravity(gravity | Gravity.CENTER_VERTICAL);
-        return view;
-    }
+    private void buildInterface() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.rgb(238, 243, 248));
 
-    private Button controlButton(String text) {
-        Button button = new Button(this);
-        button.setText(text);
-        button.setTextSize(14);
-        button.setAllCaps(false);
-        return button;
-    }
+        LinearLayout header = new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(16), dp(10), dp(16), dp(10));
+        header.setBackgroundColor(NAVY);
 
-    private int dp(int value) {
-        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        TextView title = text("داش كام الرحلة", 20, Color.WHITE, Typeface.BOLD);
+        TextView subtitle = text("تسجيل سريع وآمن • Android 4.4+", 12, Color.rgb(186, 230, 253), Typeface.NORMAL);
+        titles.addView(title);
+        titles.addView(subtitle);
+        header.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        cameraLabel = badge("خلفية", BLUE);
+        header.addView(cameraLabel);
+        root.addView(header);
+
+        FrameLayout cameraFrame = new FrameLayout(this);
+        cameraFrame.setBackgroundColor(Color.BLACK);
+        preview = new SurfaceView(this);
+        surfaceHolder = preview.getHolder();
+        surfaceHolder.addCallback(this);
+        surfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+        cameraFrame.addView(preview, new FrameLayout.LayoutParams(-1, -1));
+
+        LinearLayout topOverlay = new LinearLayout(this);
+        topOverlay.setGravity(Gravity.CENTER_VERTICAL);
+        topOverlay.setPadding(dp(12), dp(12), dp(12), 0);
+        timerText = badge("جاهز للتسجيل", GREEN);
+        topOverlay.addView(timerText);
+        clockText = badge("--", Color.argb(185, 7, 17, 31));
+        LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clockParams.gravity = Gravity.RIGHT;
+        clockParams.leftMargin = dp(8);
+        topOverlay.addView(clockText, clockParams);
+        FrameLayout.LayoutParams topParams = new FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP);
+        cameraFrame.addView(topOverlay, topParams);
+
+        LinearLayout speedPanel = new LinearLayout(this);
+        speedPanel.setOrientation(LinearLayout.VERTICAL);
+        speedPanel.setGravity(Gravity.CENTER);
+        speedPanel.setPadding(dp(14), dp(8), dp(14), dp(8));
+        speedPanel.setBackground(rounded(Color.argb(190, 7, 17, 31), dp(18)));
+        speedText = text("0", 36, Color.WHITE, Typeface.BOLD);
+        TextView unit = text("كم/س", 11, Color.rgb(186, 230, 253), Typeface.BOLD);
+        speedPanel.addView(speedText);
+        speedPanel.addView(unit);
+        FrameLayout.LayoutParams speedParams = new FrameLayout.LayoutParams(dp(94), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.RIGHT);
+        speedParams.setMargins(0, 0, dp(12), dp(12));
+        cameraFrame.addView(speedPanel, speedParams);
+
+        LinearLayout.LayoutParams cameraParams = new LinearLayout.LayoutParams(-1, 0, 1);
+        cameraParams.setMargins(dp(10), dp(10), dp(10), 0);
+        root.addView(cameraFrame, cameraParams);
+
+        LinearLayout dashboard = new LinearLayout(this);
+        dashboard.setGravity(Gravity.CENTER_VERTICAL);
+        dashboard.setPadding(dp(14), dp(8), dp(14), dp(6));
+        statusText = text("جاري تجهيز الكاميرا…", 13, NAVY, Typeface.BOLD);
+        dashboard.addView(statusText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        storageText = text(storageSummary(), 11, SLATE, Typeface.NORMAL);
+        dashboard.addView(storageText);
+        root.addView(dashboard);
+
+        LinearLayout controls = new LinearLayout(this);
+        controls.setGravity(Gravity.CENTER);
+        controls.setPadding(dp(10), dp(4), dp(10), dp(12));
+
+        switchButton = actionButton("تبديل", NAVY);
+        switchButton.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View view) { switchCamera(); }
+        });
+        controls.addView(switchButton, buttonParams());
+
+        recordButton = actionButton("بدء التسجيل", RED);
+        recordButton.setTextSize(16);
+        recordButton.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View view) {
+                if (recording) stopRecording(true); else startRecording();
+            }
+        });
+        LinearLayout.LayoutParams mainButtonParams = buttonParams();
+        mainButtonParams.weight = 1.35f;
+        controls.addView(recordButton, mainButtonParams);
+
+        audioButton = actionButton(audioEnabled ? "الصوت: نعم" : "الصوت: لا", audioEnabled ? GREEN : SLATE);
+        audioButton.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View view) { toggleAudio(); }
+        });
+        controls.addView(audioButton, buttonParams());
+        root.addView(controls);
+
+        TextView safety = text("ثبّت الهاتف قبل الحركة ولا تستخدم الأزرار أثناء القيادة", 11, Color.rgb(146, 64, 14), Typeface.BOLD);
+        safety.setGravity(Gravity.CENTER);
+        safety.setPadding(dp(8), dp(6), dp(8), dp(8));
+        root.addView(safety);
+        setContentView(root);
     }
 
     private void requestNeededPermissions() {
-        if (android.os.Build.VERSION.SDK_INT < 23) {
-            startLocation();
-            return;
-        }
-        requestPermissions(new String[]{
-                Manifest.permission.CAMERA,
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
-        }, REQ_PERMISSIONS);
+        if (Build.VERSION.SDK_INT < 23) return;
+        ArrayList<String> missing = new ArrayList<String>();
+        addIfMissing(missing, Manifest.permission.CAMERA);
+        addIfMissing(missing, Manifest.permission.RECORD_AUDIO);
+        addIfMissing(missing, Manifest.permission.ACCESS_FINE_LOCATION);
+        if (Build.VERSION.SDK_INT <= 28) addIfMissing(missing, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        if (!missing.isEmpty()) requestPermissions(missing.toArray(new String[missing.size()]), REQUEST_PERMISSIONS);
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    private void addIfMissing(List<String> permissions, String permission) {
+        if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) permissions.add(permission);
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQ_PERMISSIONS) {
-            if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "إذن الكاميرا ضروري لتشغيل التطبيق", Toast.LENGTH_LONG).show();
-            }
-            startLocation();
-        }
+        if (requestCode == REQUEST_PERMISSIONS && surfaceReady) openCamera(cameraId);
     }
 
-    @Override public void surfaceCreated(SurfaceHolder holder) { openCamera(holder); }
-
-    private void openCamera(SurfaceHolder holder) {
-        if (recording) return;
-        try {
-            releaseCamera();
-            camera = Camera.open(cameraId);
-            Camera.CameraInfo info = new Camera.CameraInfo();
-            Camera.getCameraInfo(cameraId, info);
-            camera.setDisplayOrientation(info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT ? 180 : 0);
-            Camera.Parameters params = camera.getParameters();
-            List<String> focusModes = params.getSupportedFocusModes();
-            if (focusModes != null && focusModes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
-                params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
-            }
-            camera.setParameters(params);
-            camera.setPreviewDisplay(holder);
-            camera.startPreview();
-            statusText.setText("الكاميرا جاهزة");
-        } catch (Exception e) {
-            statusText.setText("تعذر فتح الكاميرا");
-            Toast.makeText(this, "تعذر تشغيل الكاميرا: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
+    @Override public void surfaceCreated(SurfaceHolder holder) {
+        surfaceReady = true;
+        openCamera(cameraId);
     }
 
     @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        if (camera == null || recording) return;
-        try {
-            camera.stopPreview();
-            camera.setPreviewDisplay(holder);
-            camera.startPreview();
-        } catch (Exception ignored) { }
+        if (camera != null && !recording) startPreview();
     }
 
     @Override public void surfaceDestroyed(SurfaceHolder holder) {
-        if (recording) stopRecording();
+        surfaceReady = false;
         releaseCamera();
     }
 
-    private void startRecording() {
-        if (camera == null) {
-            Toast.makeText(this, "الكاميرا غير جاهزة", Toast.LENGTH_SHORT).show();
+    private void openCamera(int requestedId) {
+        if (!surfaceReady || camera != null) return;
+        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            statusText.setText("امنح إذن الكاميرا للبدء");
             return;
         }
         try {
-            File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "DashCamTrip");
-            if (!dir.exists() && !dir.mkdirs()) throw new Exception("تعذر إنشاء مجلد الحفظ");
-            String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
-            currentFile = new File(dir, "dashcam_" + stamp + ".mp4");
+            if (requestedId < 0) requestedId = findCamera(Camera.CameraInfo.CAMERA_FACING_BACK);
+            if (requestedId < 0) requestedId = 0;
+            cameraId = requestedId;
+            camera = Camera.open(cameraId);
+            configureCamera();
+            camera.setPreviewDisplay(surfaceHolder);
+            startPreview();
+            startLocation();
+            statusText.setText("الكاميرا جاهزة");
+            switchButton.setEnabled(Camera.getNumberOfCameras() > 1);
+        } catch (Exception e) {
+            releaseCamera();
+            statusText.setText("تعذر فتح الكاميرا");
+            Toast.makeText(this, "أغلق أي تطبيق آخر يستخدم الكاميرا ثم أعد المحاولة", Toast.LENGTH_LONG).show();
+        }
+    }
 
+    private void configureCamera() {
+        Camera.Parameters params = camera.getParameters();
+        List<Camera.Size> sizes = params.getSupportedPreviewSizes();
+        Camera.Size best = chooseSize(sizes, 1280, 720);
+        if (best != null) params.setPreviewSize(best.width, best.height);
+        if (params.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
+            params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+        }
+        camera.setParameters(params);
+        camera.setDisplayOrientation(displayOrientation(cameraId));
+    }
+
+    private Camera.Size chooseSize(List<Camera.Size> sizes, int wantedWidth, int wantedHeight) {
+        if (sizes == null || sizes.isEmpty()) return null;
+        Camera.Size best = sizes.get(0);
+        long bestScore = Long.MAX_VALUE;
+        for (Camera.Size size : sizes) {
+            long score = Math.abs(size.width - wantedWidth) + Math.abs(size.height - wantedHeight) * 2L;
+            if (score < bestScore) { best = size; bestScore = score; }
+        }
+        return best;
+    }
+
+    private void startPreview() {
+        if (camera == null) return;
+        try { camera.stopPreview(); } catch (Exception ignored) { }
+        try { camera.setPreviewDisplay(surfaceHolder); camera.startPreview(); } catch (Exception ignored) { }
+    }
+
+    private int displayOrientation(int id) {
+        Camera.CameraInfo info = new Camera.CameraInfo();
+        Camera.getCameraInfo(id, info);
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        int degrees = rotation == Surface.ROTATION_90 ? 90 : rotation == Surface.ROTATION_180 ? 180 : rotation == Surface.ROTATION_270 ? 270 : 0;
+        if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) return (360 - ((info.orientation + degrees) % 360)) % 360;
+        return (info.orientation - degrees + 360) % 360;
+    }
+
+    private int findCamera(int facing) {
+        Camera.CameraInfo info = new Camera.CameraInfo();
+        for (int i = 0; i < Camera.getNumberOfCameras(); i++) {
+            Camera.getCameraInfo(i, info);
+            if (info.facing == facing) return i;
+        }
+        return -1;
+    }
+
+    private void switchCamera() {
+        if (recording || Camera.getNumberOfCameras() < 2) return;
+        Camera.CameraInfo current = new Camera.CameraInfo();
+        Camera.getCameraInfo(cameraId, current);
+        int wanted = current.facing == Camera.CameraInfo.CAMERA_FACING_BACK ? Camera.CameraInfo.CAMERA_FACING_FRONT : Camera.CameraInfo.CAMERA_FACING_BACK;
+        int next = findCamera(wanted);
+        if (next < 0) return;
+        releaseCamera();
+        cameraId = next;
+        cameraLabel.setText(wanted == Camera.CameraInfo.CAMERA_FACING_BACK ? "خلفية" : "أمامية");
+        openCamera(cameraId);
+    }
+
+    private void toggleAudio() {
+        if (recording) {
+            Toast.makeText(this, "غيّر إعداد الصوت قبل بدء التسجيل", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        audioEnabled = !audioEnabled;
+        getPreferences(MODE_PRIVATE).edit().putBoolean("audio", audioEnabled).apply();
+        audioButton.setText(audioEnabled ? "الصوت: نعم" : "الصوت: لا");
+        audioButton.setBackground(rounded(audioEnabled ? GREEN : SLATE, dp(16)));
+    }
+
+    private void startRecording() {
+        if (camera == null || !surfaceReady) {
+            Toast.makeText(this, "انتظر حتى تصبح الكاميرا جاهزة", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (audioEnabled && Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestNeededPermissions();
+            return;
+        }
+        File directory = recordingsDirectory();
+        if (!directory.exists() && !directory.mkdirs()) {
+            Toast.makeText(this, "تعذر إنشاء مجلد الحفظ", Toast.LENGTH_LONG).show();
+            return;
+        }
+        currentFile = new File(directory, "DASH_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".mp4");
+        try {
             camera.unlock();
             recorder = new MediaRecorder();
             recorder.setCamera(camera);
-            if (recordAudio) recorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
+            if (audioEnabled) recorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
             recorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
-
-            CamcorderProfile profile = CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_480P)
-                    ? CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_480P)
-                    : CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_LOW);
-            if (recordAudio) {
+            CamcorderProfile profile = bestProfile(cameraId);
+            if (audioEnabled) {
                 recorder.setProfile(profile);
             } else {
                 recorder.setOutputFormat(profile.fileFormat);
                 recorder.setVideoEncoder(profile.videoCodec);
-                recorder.setVideoEncodingBitRate(profile.videoBitRate);
                 recorder.setVideoFrameRate(profile.videoFrameRate);
                 recorder.setVideoSize(profile.videoFrameWidth, profile.videoFrameHeight);
+                recorder.setVideoEncodingBitRate(Math.min(profile.videoBitRate, 5000000));
             }
             recorder.setOutputFile(currentFile.getAbsolutePath());
-            recorder.setPreviewDisplay(preview.getHolder().getSurface());
+            recorder.setPreviewDisplay(surfaceHolder.getSurface());
+            recorder.setOrientationHint(recordingOrientation(cameraId));
+            recorder.setOnErrorListener(new MediaRecorder.OnErrorListener() {
+                @Override public void onError(MediaRecorder mediaRecorder, int what, int extra) { stopRecording(false); }
+            });
             recorder.prepare();
             recorder.start();
-
             recording = true;
-            recordingStartedAt = System.currentTimeMillis();
-            timerText.setText("00:00");
-            timerHandler.post(timerTick);
+            startedAt = System.currentTimeMillis();
+            maxSpeed = 0;
             recordButton.setText("إيقاف وحفظ");
-            statusText.setText("● جاري التسجيل");
+            recordButton.setBackground(rounded(NAVY, dp(16)));
+            switchButton.setEnabled(false);
             audioButton.setEnabled(false);
-            cameraButton.setEnabled(false);
+            timerText.setBackground(rounded(RED, dp(16)));
+            statusText.setText("جاري التسجيل • الشاشة ستبقى مضاءة");
         } catch (Exception e) {
             releaseRecorder();
-            try { camera.lock(); } catch (Exception ignored) { }
-            Toast.makeText(this, "تعذر بدء التسجيل: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            try { camera.lock(); startPreview(); } catch (Exception ignored) { }
+            if (currentFile != null) currentFile.delete();
+            Toast.makeText(this, "تعذر بدء التسجيل بهذه الجودة", Toast.LENGTH_LONG).show();
         }
     }
 
-    private void stopRecording() {
+    private CamcorderProfile bestProfile(int id) {
+        if (CamcorderProfile.hasProfile(id, CamcorderProfile.QUALITY_720P)) return CamcorderProfile.get(id, CamcorderProfile.QUALITY_720P);
+        if (CamcorderProfile.hasProfile(id, CamcorderProfile.QUALITY_480P)) return CamcorderProfile.get(id, CamcorderProfile.QUALITY_480P);
+        return CamcorderProfile.get(id, CamcorderProfile.QUALITY_LOW);
+    }
+
+    private int recordingOrientation(int id) {
+        Camera.CameraInfo info = new Camera.CameraInfo();
+        Camera.getCameraInfo(id, info);
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        int degrees = rotation == Surface.ROTATION_90 ? 90 : rotation == Surface.ROTATION_180 ? 180 : rotation == Surface.ROTATION_270 ? 270 : 0;
+        if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) return (info.orientation + degrees) % 360;
+        return (info.orientation - degrees + 360) % 360;
+    }
+
+    private void stopRecording(boolean userRequested) {
         if (!recording) return;
-        timerHandler.removeCallbacks(timerTick);
-        try {
-            recorder.stop();
-        } catch (RuntimeException e) {
-            if (currentFile != null) currentFile.delete();
-        }
-        releaseRecorder();
         recording = false;
-        recordButton.setText("ابدأ التسجيل");
-        statusText.setText("تم حفظ الفيديو");
+        try { recorder.stop(); } catch (RuntimeException e) { if (currentFile != null) currentFile.delete(); }
+        releaseRecorder();
+        try { camera.lock(); startPreview(); } catch (Exception ignored) { }
+        recordButton.setText("بدء التسجيل");
+        recordButton.setBackground(rounded(RED, dp(16)));
+        switchButton.setEnabled(Camera.getNumberOfCameras() > 1);
         audioButton.setEnabled(true);
-        cameraButton.setEnabled(Camera.getNumberOfCameras() > 1);
-
-        try {
-            camera.lock();
-            camera.reconnect();
-            camera.setPreviewDisplay(preview.getHolder());
-            camera.startPreview();
-        } catch (Exception ignored) { }
-
+        timerText.setBackground(rounded(GREEN, dp(16)));
+        statusText.setText("تم الحفظ • أعلى سرعة " + Math.round(maxSpeed) + " كم/س");
+        storageText.setText(storageSummary());
         if (currentFile != null && currentFile.exists() && currentFile.length() > 0) {
-            MediaScannerConnection.scanFile(this,
-                    new String[]{currentFile.getAbsolutePath()},
-                    new String[]{"video/mp4"}, null);
-            Toast.makeText(this, "تم الحفظ في Movies/DashCamTrip", Toast.LENGTH_LONG).show();
-        } else {
-            statusText.setText("لم يُحفظ الفيديو");
+            MediaScannerConnection.scanFile(this, new String[]{currentFile.getAbsolutePath()}, new String[]{"video/mp4"}, null);
+            if (userRequested) Toast.makeText(this, "تم حفظ الفيديو في مجلد DashCamTrip", Toast.LENGTH_LONG).show();
         }
+    }
+
+    private File recordingsDirectory() {
+        File movies = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES);
+        if (!Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())) {
+            File appMovies = getExternalFilesDir(Environment.DIRECTORY_MOVIES);
+            if (appMovies != null) movies = appMovies;
+        }
+        return new File(movies, "DashCamTrip");
+    }
+
+    private String storageSummary() {
+        File dir = recordingsDirectory();
+        File[] files = dir.listFiles();
+        int count = files == null ? 0 : files.length;
+        long freeMb = dir.getUsableSpace() / (1024L * 1024L);
+        return count + " مقطع • " + freeMb + " MB متاح";
     }
 
     private void startLocation() {
-        try {
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 1f, this);
-        } catch (SecurityException ignored) {
-            speedText.setText("GPS غير متاح");
-        } catch (IllegalArgumentException ignored) {
-            speedText.setText("لا يوجد GPS");
-        }
+        if (locationManager == null) locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return;
+        try { locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 1, this); } catch (Exception ignored) { }
     }
 
     @Override public void onLocationChanged(Location location) {
-        float kmh = location.hasSpeed() ? location.getSpeed() * 3.6f : 0f;
-        speedText.setText(Math.round(kmh) + " كم/س");
+        speedKmh = location.hasSpeed() ? Math.max(0, location.getSpeed() * 3.6f) : 0;
+        if (recording && speedKmh > maxSpeed) maxSpeed = speedKmh;
     }
-    @Override public void onStatusChanged(String provider, int status, Bundle extras) { }
+    @Override public void onProviderDisabled(String provider) { statusText.setText("فعّل GPS لعرض السرعة"); }
     @Override public void onProviderEnabled(String provider) { }
-    @Override public void onProviderDisabled(String provider) { speedText.setText("GPS متوقف"); }
+    @Override public void onStatusChanged(String provider, int status, Bundle extras) { }
 
     private void releaseRecorder() {
         if (recorder != null) {
-            try { recorder.reset(); } catch (Exception ignored) { }
-            try { recorder.release(); } catch (Exception ignored) { }
+            try { recorder.reset(); recorder.release(); } catch (Exception ignored) { }
             recorder = null;
         }
     }
 
     private void releaseCamera() {
+        releaseRecorder();
         if (camera != null) {
-            try { camera.stopPreview(); } catch (Exception ignored) { }
-            try { camera.release(); } catch (Exception ignored) { }
+            try { camera.stopPreview(); camera.release(); } catch (Exception ignored) { }
             camera = null;
         }
     }
 
     @Override protected void onPause() {
-        if (recording) stopRecording();
-        timerHandler.removeCallbacks(timerTick);
-        if (locationManager != null) {
-            try { locationManager.removeUpdates(this); } catch (SecurityException ignored) { }
-        }
+        if (recording) stopRecording(false);
         releaseCamera();
+        if (locationManager != null) {
+            try { locationManager.removeUpdates(this); } catch (Exception ignored) { }
+        }
         super.onPause();
     }
 
     @Override protected void onResume() {
         super.onResume();
-        if (preview != null && preview.getHolder().getSurface().isValid()) openCamera(preview.getHolder());
-        startLocation();
+        if (surfaceReady) openCamera(cameraId);
+    }
+
+    @Override protected void onDestroy() {
+        handler.removeCallbacksAndMessages(null);
+        releaseCamera();
+        super.onDestroy();
+    }
+
+    @Override public void onBackPressed() {
+        if (recording) {
+            new AlertDialog.Builder(this).setTitle("إيقاف التسجيل؟").setMessage("سيتم حفظ المقطع الحالي قبل الخروج.")
+                    .setNegativeButton("متابعة التسجيل", null)
+                    .setPositiveButton("حفظ وخروج", new DialogInterface.OnClickListener() {
+                        @Override public void onClick(DialogInterface dialog, int which) { stopRecording(true); finish(); }
+                    }).show();
+        } else super.onBackPressed();
+    }
+
+    private TextView text(String value, int sp, int color, int style) {
+        TextView view = new TextView(this);
+        view.setText(value);
+        view.setTextSize(sp);
+        view.setTextColor(color);
+        view.setTypeface(Typeface.create("sans", style));
+        return view;
+    }
+
+    private TextView badge(String value, int color) {
+        TextView view = text(value, 12, Color.WHITE, Typeface.BOLD);
+        view.setGravity(Gravity.CENTER);
+        view.setPadding(dp(11), dp(7), dp(11), dp(7));
+        view.setBackground(rounded(color, dp(16)));
+        return view;
+    }
+
+    private Button actionButton(String value, int color) {
+        Button button = new Button(this);
+        button.setText(value);
+        button.setTextSize(13);
+        button.setTextColor(Color.WHITE);
+        button.setTypeface(Typeface.DEFAULT_BOLD);
+        button.setGravity(Gravity.CENTER);
+        button.setPadding(dp(6), 0, dp(6), 0);
+        button.setMinHeight(dp(52));
+        button.setBackground(rounded(color, dp(16)));
+        return button;
+    }
+
+    private LinearLayout.LayoutParams buttonParams() {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(54), 1);
+        params.setMargins(dp(4), 0, dp(4), 0);
+        return params;
+    }
+
+    private GradientDrawable rounded(int color, int radius) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(radius);
+        return drawable;
+    }
+
+    private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+
+    private String formatDuration(long milliseconds) {
+        long total = milliseconds / 1000;
+        return String.format(Locale.US, "%02d:%02d", total / 60, total % 60);
     }
 }
